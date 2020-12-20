@@ -1,5 +1,6 @@
 # Welcome to mempyml Version 0.1!
 <p align="center"><img src="logo.png" height="100px"></p>
+
 The **Memristive Python Machine Learning** (MemPyML) package was built for researchers and chip designers alike. MemPyML seeks to streamline the investigation process when considering memristive devices for implementing a machine learning algorithm in hardware. By using the familiar [Keras](https://keras.io) syntax, it will be second nature to write GPU-optimized code to push your algorithm to its limits.
 *Currently, all features are still a work in progress.*
 
