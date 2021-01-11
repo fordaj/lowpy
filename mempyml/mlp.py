@@ -134,13 +134,13 @@ class Dense:
         # Layer parameters
         self.x_h        = np.ones(self.I_h,dtype=np.float64)
         self.x_d        = hostToDevice(self.x_h)
-        #self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
+        self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
         #self.w_h        = np.ones((self.J_h,self.I_h),dtype=np.float64) * 0.01
-        self.w_h        = np.random.normal(0,math.sqrt(2/784),(self.J_h,self.I_h)).astype(np.float64)
+        #self.w_h        = np.random.normal(0,math.sqrt(2/784),(self.J_h,self.I_h)).astype(np.float64)
         self.w_d        = hostToDevice(self.w_h)
-        #self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
+        self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
         #self.b_h        = np.ones(self.J_h,dtype=np.float64) * 0.01
-        self.b_h        = np.random.normal(0,math.sqrt(2/784),self.J_h).astype(np.float64)
+        #self.b_h        = np.random.normal(0,math.sqrt(2/784),self.J_h).astype(np.float64)
         self.b_d        = hostToDevice(self.b_h)
         self.y_h        = np.zeros(self.J_h,dtype=np.float64)
         self.y_d        = hostToDevice(self.y_h)
@@ -168,7 +168,6 @@ class Dense:
             double *z
             ){
                 int j = blockIdx.x;
-                int J = blockDim.x;
                 double sum = 0;
                 for (int i = 0; i < I; i++) sum += x[i]*w[j*I+i];
                 y[j] = sum + b[j];
@@ -190,8 +189,7 @@ class Dense:
                 double *x
             ){
                 int j   = blockIdx.x;
-                int J   = blockDim.x;
-                int I_n = blockDim.x;
+                int I_n = gridDim.x;
                 if (label > -1){
                     if (j == label){
                         dedz[j] = z[j] - 1;
@@ -213,7 +211,6 @@ class Dense:
                 double *hits
             ){
                 int j = blockIdx.x;
-                int J = blockDim.x;
                 if (j == 0){
                     double maxVal = 0;
                     int maxIdx = 0;
@@ -323,9 +320,9 @@ testData = np.true_divide(testData, max(np.max(trainData), np.max(testData)))
 
 #-----BUILD MODEL-----#
 model = Sequential()
-model.add(Dense(533,input_shape=784,alpha=0.2))
-model.add(Dense(533,alpha=0.2))
-model.add(Dense(10,alpha=0.2))
+model.add(Dense(533,input_shape=784,alpha=0.01))
+model.add(Dense(533,alpha=0.01))
+model.add(Dense(10,alpha=0.01))
 
 #-----TRAIN MODEL-----#
 history = model.fit(trainData, trainLabels, epochs=10, batch_size=60000, validation_data=(testData, testLabels))
