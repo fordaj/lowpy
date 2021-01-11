@@ -65,16 +65,21 @@ class Sequential:
             self.layer[l].backpropagate()
 
     # Decision
-    def inference(self, label):
-        self.layer[self.numLayers-1].argmax(label)
+    def inference(self,label,hits_d):
+        self.layer[self.numLayers-1].argmax(label,hits_d)
 
     # Test model
     def validate(self, testData_d, testLabels_d):
         numTests = len(testData_d)
-        hits = 0
+        testHits_h = np.zeros(3,dtype=np.float64)
+        testHits_d = hostToDevice(testHits_h)
         self.layer[self.numLayers-1].hits_h = 0
         for i in range(numTests):
             self.propagate(testData_d[i])
+            self.inference(testLabels_d[i], testHits_d)
+        cuda.memcpy_dtoh(testHits_h, testHits_d)
+        return 1-testHits_h[0]/numTests
+
 
     # Train model
     def fit(self, trainData, trainLabels, epochs, batch_size, validation_data):
@@ -88,15 +93,20 @@ class Sequential:
         for i in range(numTrain):
             trainData_d.append(hostToDevice(trainData[i]))
         trainLabels_d = np.int32(trainLabels)
-        for i in range(500):#len(testData)):
+        for i in range(len(testData)):
             testData_d.append(hostToDevice(testData[i]))
         testLabels_d = np.int32(testLabels)
         # Train network
         tic()
-        hits = []
+        trainLoss = []
+        testLoss = []
         print("Training...")
         for epoch in range(epochs):
             print("Epoch " + str(epoch))
+            testLoss.append(self.validate(testData_d,testLabels_d))
+            print(testLoss)
+            trainHits_h = np.zeros(3,dtype=np.float64)
+            trainHits_d = hostToDevice(trainHits_h)
             self.layer[self.numLayers-1].resetHits()
             for i in range(numTrain):
                 #self.deviceToHost()
@@ -104,10 +114,11 @@ class Sequential:
                 #self.deviceToHost()
                 self.backpropagate(trainLabels_d[i])
                 #self.deviceToHost()
-                self.inference(trainLabels_d[i])
+                self.inference(trainLabels_d[i],trainHits_d)
             self.deviceToHost()
-            hits.append(self.layer[self.numLayers-1].hits_h[0])
-            print(hits)
+            cuda.memcpy_dtoh(trainHits_h, trainHits_d)
+            trainLoss.append(1-trainHits_h[0]/numTrain)
+            print(trainLoss)
         toc()
         return True
 
@@ -134,13 +145,13 @@ class Dense:
         # Layer parameters
         self.x_h        = np.ones(self.I_h,dtype=np.float64)
         self.x_d        = hostToDevice(self.x_h)
-        self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
+        #self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
         #self.w_h        = np.ones((self.J_h,self.I_h),dtype=np.float64) * 0.01
-        #self.w_h        = np.random.normal(0,math.sqrt(2/784),(self.J_h,self.I_h)).astype(np.float64)
+        self.w_h        = np.random.normal(0,math.sqrt(2/784),(self.J_h,self.I_h)).astype(np.float64)
         self.w_d        = hostToDevice(self.w_h)
-        self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
+        #self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
         #self.b_h        = np.ones(self.J_h,dtype=np.float64) * 0.01
-        #self.b_h        = np.random.normal(0,math.sqrt(2/784),self.J_h).astype(np.float64)
+        self.b_h        = np.random.normal(0,math.sqrt(2/784),self.J_h).astype(np.float64)
         self.b_d        = hostToDevice(self.b_h)
         self.y_h        = np.zeros(self.J_h,dtype=np.float64)
         self.y_d        = hostToDevice(self.y_h)
@@ -293,12 +304,12 @@ class Dense:
         )
 
     # Find winning neuron
-    def argmax(self, label):
+    def argmax(self, label, hits_d):
         argmax = self.program.get_function("argmax")
         argmax(
                 label,
                 self.z_d,
-                self.hits_d,
+                hits_d,
                 block=(1,1,1), 
                 grid=(self.J_h,1,1)
         )
@@ -320,9 +331,9 @@ testData = np.true_divide(testData, max(np.max(trainData), np.max(testData)))
 
 #-----BUILD MODEL-----#
 model = Sequential()
-model.add(Dense(533,input_shape=784,alpha=0.01))
-model.add(Dense(533,alpha=0.01))
-model.add(Dense(10,alpha=0.01))
+model.add(Dense(533,input_shape=784,alpha=0.05))
+model.add(Dense(533,alpha=0.05))
+model.add(Dense(10,alpha=0.05))
 
 #-----TRAIN MODEL-----#
 history = model.fit(trainData, trainLabels, epochs=10, batch_size=60000, validation_data=(testData, testLabels))
