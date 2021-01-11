@@ -79,8 +79,7 @@ class Sequential:
             self.inference(testLabels_d[i], testHits_d)
         cuda.memcpy_dtoh(testHits_h, testHits_d)
         return 1-testHits_h[0]/numTests
-
-
+        
     # Train model
     def fit(self, trainData, trainLabels, epochs, batch_size, validation_data):
         numTrain = len(trainData)
