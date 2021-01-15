@@ -34,7 +34,7 @@ class Sequential:
     def __init__(self):
         self.layer = []
         self.numLayers = 0
-    
+
     # Function for appending layer objects to the model
     def add(self,layer_type):
         self.layer.append(layer_type)
@@ -68,6 +68,19 @@ class Sequential:
     def inference(self,label,hits_d):
         self.layer[self.numLayers-1].argmax(label,hits_d)
 
+    # Track model data
+    class metrics:
+        def __init__(self):
+            self.train = self.trialData()
+            self.test = self.trialData()
+            self.alpha = []
+            self.beta = []
+        class trialData:
+            def __init__(self):
+                self.iteration = []
+                self.accuracy = []
+                self.loss = []
+
     # Test model
     def validate(self, testData_d, testLabels_d):
         numTests = len(testData_d)
@@ -78,10 +91,15 @@ class Sequential:
             self.propagate(testData_d[i])
             self.inference(testLabels_d[i], testHits_d)
         cuda.memcpy_dtoh(testHits_h, testHits_d)
-        return 1-testHits_h[0]/numTests
+        accuracy = testHits_h[0]/numTests
+        loss = 1-accuracy
+        self.history.test.accuracy.append(accuracy)
+        self.history.test.loss.append(loss)
+        print("Testing\t\tAccuracy: " + f'{accuracy*100:.3f}' + "%\tLoss: " + f'{loss:.5f}')
         
     # Train model
     def fit(self, trainData, trainLabels, epochs, batch_size, validation_data):
+        self.history = self.metrics()
         numTrain = len(trainData)
         # Dataset to device
         print("Sending dataset to GPU...")
@@ -96,14 +114,9 @@ class Sequential:
             testData_d.append(hostToDevice(testData[i]))
         testLabels_d = np.int32(testLabels)
         # Train network
-        tic()
-        trainLoss = []
-        testLoss = []
-        print("Training...")
         for epoch in range(epochs):
             print("Epoch " + str(epoch))
-            testLoss.append(self.validate(testData_d,testLabels_d))
-            print(testLoss)
+            self.validate(testData_d,testLabels_d)
             trainHits_h = np.zeros(3,dtype=np.float64)
             trainHits_d = hostToDevice(trainHits_h)
             self.layer[self.numLayers-1].resetHits()
@@ -116,10 +129,12 @@ class Sequential:
                 self.inference(trainLabels_d[i],trainHits_d)
             self.deviceToHost()
             cuda.memcpy_dtoh(trainHits_h, trainHits_d)
-            trainLoss.append(1-trainHits_h[0]/numTrain)
-            print(trainLoss)
-        toc()
-        return True
+            accuracy = trainHits_h[0]/numTrain
+            loss = 1 - accuracy
+            self.history.train.accuracy.append(accuracy)
+            self.history.train.loss.append(loss)
+            print("Training\tAccuracy: " + f'{accuracy*100:.3f}' + "%\tLoss:\t" + f'{loss:.5f}')
+        return self.history
 
 
 
@@ -129,10 +144,11 @@ class Sequential:
 
 class Dense:
     # Constructor for model initialization
-    def __init__(self, output_shape, input_shape=784, alpha=0.01):
+    def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0):
         self.I_h = input_shape
         self.J_h = output_shape
         self.alpha = np.float64(alpha)
+        self.beta = np.float64(beta)
 
     # Layer constructor
     def build(self,input_shape,output_shape):
@@ -141,9 +157,10 @@ class Dense:
         self.I_d    = np.int32(self.I_h)
         self.J_h    = output_shape
         self.J_d    = np.int32(self.J_h)
-        # Layer parameters
+        # Input
         self.x_h        = np.ones(self.I_h,dtype=np.float64)
         self.x_d        = hostToDevice(self.x_h)
+        # Weights
         #self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
         #self.w_h        = np.ones((self.J_h,self.I_h),dtype=np.float64) * 0.01
         self.w_h        = np.random.normal(0,math.sqrt(2/784),(self.J_h,self.I_h)).astype(np.float64)
@@ -152,14 +169,22 @@ class Dense:
         #self.b_h        = np.ones(self.J_h,dtype=np.float64) * 0.01
         self.b_h        = np.random.normal(0,math.sqrt(2/784),self.J_h).astype(np.float64)
         self.b_d        = hostToDevice(self.b_h)
+        # Momentum
+        self.vtw_h      = np.zeros((self.J_h,self.I_h),dtype=np.float64)
+        self.vtw_d      = hostToDevice(self.vtw_h)
+        self.vtb_h      = np.zeros(self.J_h,dtype=np.float64)
+        self.vtb_d      = hostToDevice(self.vtb_h)
+        # Outputs
         self.y_h        = np.zeros(self.J_h,dtype=np.float64)
         self.y_d        = hostToDevice(self.y_h)
         self.z_h        = np.zeros(self.J_h,dtype=np.float64)
         self.z_d        = hostToDevice(self.z_h)
+        # Gradients
         self.dedz_h     = np.zeros(self.J_h,dtype=np.float64)
         self.dedz_d     = hostToDevice(self.dedz_h)
         self.dzdy_h     = np.zeros(self.J_h,dtype=np.float64)
         self.dzdy_d     = hostToDevice(self.dzdy_h)
+        # Next layer attributes
         self.n_J_d      = self.J_d
         self.n_w_d      = self.w_d
         self.n_z_d      = self.z_d
@@ -196,7 +221,10 @@ class Dense:
                 const int I,
                 double *b,
                 double *w,
-                double *x
+                const double *x,
+                const double beta,
+                double *vtb,
+                double *vtw
             ){
                 int j   = blockIdx.x;
                 int I_n = gridDim.x;
@@ -212,8 +240,12 @@ class Dense:
                     dedz[j] = sum;
                 }
                 dzdy[j] = z[j] * (1 - z[j]);
-                b[j]   -= alpha * dedz[j] * dzdy[j];
-                for (int i = 0; i < I; i++) w[j*I+i] -= alpha * dedz[j] * dzdy[j] * x[i];
+                b[j]   -= (beta * vtb[j] + alpha * dedz[j] * dzdy[j]);
+                vtb[j]  = beta * vtb[j] + alpha * dedz[j] * dzdy[j];
+                for (int i = 0; i < I; i++){
+                    w[j*I+i]   -= (beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[i]);
+                    vtw[j*I+i]  = beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[i];
+                }
             }
         __global__ void argmax(
                 const int label,
@@ -261,6 +293,8 @@ class Dense:
         cuda.memcpy_dtoh(self.dedz_h, self.dedz_d)
         cuda.memcpy_dtoh(self.dzdy_h, self.dzdy_d)
         cuda.memcpy_dtoh(self.hits_h, self.hits_d)
+        cuda.memcpy_dtoh(self.vtb_h, self.vtb_d)
+        cuda.memcpy_dtoh(self.vtw_h, self.vtw_d)
 
     # Reset the hit counter
     def resetHits(self):
@@ -298,6 +332,9 @@ class Dense:
                 self.b_d,
                 self.w_d,
                 self.x_d,
+                self.beta,
+                self.vtb_d,
+                self.vtw_d,
                 block=(1,1,1), 
                 grid=(self.J_h,1,1)
         )
@@ -316,7 +353,6 @@ class Dense:
 
 
 
-
 #-----IMPORT DATASET-----#
 (trainData, trainLabels), (testData, testLabels) = mnist.load_data()
 trainData = np.float64(trainData.reshape(trainData.shape[0],trainData.shape[1]*trainData.shape[2])) # Reshape train data from [n,28,28] to [n,784]
@@ -330,15 +366,13 @@ testData = np.true_divide(testData, max(np.max(trainData), np.max(testData)))
 
 #-----BUILD MODEL-----#
 model = Sequential()
-model.add(Dense(533,input_shape=784,alpha=0.05))
-model.add(Dense(533,alpha=0.05))
-model.add(Dense(10,alpha=0.05))
+model.add(Dense(    10,     input_shape=784,    alpha=0.025,    beta=0      ))
+#model.add(Dense(    533,                        alpha=0.025,    beta=0      ))
+#model.add(Dense(    10,                         alpha=0.025,    beta=0      ))
 
 #-----TRAIN MODEL-----#
-history = model.fit(trainData, trainLabels, epochs=10, batch_size=60000, validation_data=(testData, testLabels))
+history = model.fit(trainData, trainLabels, epochs=3, batch_size=60000, validation_data=(testData, testLabels))
 print(history)
-		
-
 
 
 
