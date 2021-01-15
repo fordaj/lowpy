@@ -81,15 +81,29 @@ class Sequential:
                 self.accuracy = []
                 self.loss = []
 
+    # Import dataset
+    def importDataset(self,trainData,trainLabels,testData,testLabels):
+        numTrain = len(trainData)
+        self.trainData_d     = []
+        self.trainLabels_d   = []
+        self.testData_d      = []
+        self.testLabels_d    = []
+        for i in range(numTrain):
+            self.trainData_d.append(hostToDevice(trainData[i]))
+        self.trainLabels_d = np.int32(trainLabels)
+        for i in range(len(testData)):
+            self.testData_d.append(hostToDevice(testData[i]))
+        self.testLabels_d = np.int32(testLabels)
+
     # Test model
-    def validate(self, testData_d, testLabels_d):
-        numTests = len(testData_d)
+    def validate(self):
+        numTests = len(self.testData_d)
         testHits_h = np.zeros(3,dtype=np.float64)
         testHits_d = hostToDevice(testHits_h)
         self.layer[self.numLayers-1].hits_h = 0
         for i in range(numTests):
-            self.propagate(testData_d[i])
-            self.inference(testLabels_d[i], testHits_d)
+            self.propagate(self.testData_d[i])
+            self.inference(self.testLabels_d[i], testHits_d)
         cuda.memcpy_dtoh(testHits_h, testHits_d)
         accuracy = testHits_h[0]/numTests
         loss = 1-accuracy
@@ -100,40 +114,28 @@ class Sequential:
     # Train model
     def fit(self, trainData, trainLabels, epochs, batch_size, validation_data):
         self.history = self.metrics()
+        self.importDataset(trainData,trainLabels,testData,testLabels)
         numTrain = len(trainData)
-        # Dataset to device
-        print("Sending dataset to GPU...")
-        trainData_d     = []
-        trainLabels_d   = []
-        testData_d      = []
-        testLabels_d    = []
-        for i in range(numTrain):
-            trainData_d.append(hostToDevice(trainData[i]))
-        trainLabels_d = np.int32(trainLabels)
-        for i in range(len(testData)):
-            testData_d.append(hostToDevice(testData[i]))
-        testLabels_d = np.int32(testLabels)
-        # Train network
         for epoch in range(epochs):
             print("Epoch " + str(epoch))
-            self.validate(testData_d,testLabels_d)
+            self.validate()
             trainHits_h = np.zeros(3,dtype=np.float64)
             trainHits_d = hostToDevice(trainHits_h)
             self.layer[self.numLayers-1].resetHits()
             for i in range(numTrain):
                 #self.deviceToHost()
-                self.propagate(trainData_d[i])
+                self.propagate(self.trainData_d[i])
                 #self.deviceToHost()
-                self.backpropagate(trainLabels_d[i])
+                self.backpropagate(self.trainLabels_d[i])
                 #self.deviceToHost()
-                self.inference(trainLabels_d[i],trainHits_d)
+                self.inference(self.trainLabels_d[i],trainHits_d)
             self.deviceToHost()
             cuda.memcpy_dtoh(trainHits_h, trainHits_d)
             accuracy = trainHits_h[0]/numTrain
             loss = 1 - accuracy
             self.history.train.accuracy.append(accuracy)
             self.history.train.loss.append(loss)
-            print("Training\tAccuracy: " + f'{accuracy*100:.3f}' + "%\tLoss:\t" + f'{loss:.5f}')
+            print("Training\tAccuracy: " + f'{accuracy*100:.3f}' + "%\tLoss: " + f'{loss:.5f}')
         return self.history
 
 
