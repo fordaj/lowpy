@@ -110,12 +110,19 @@ class Sequential:
         self.history.test.accuracy.append(accuracy)
         self.history.test.loss.append(loss)
         print("Testing\t\tAccuracy: " + f'{accuracy*100:.3f}' + "%\tLoss: " + f'{loss:.5f}')
-        
+        if (accuracy <= self.peakAccuracy):
+            self.numConverged += 1
+        else:
+            self.numConverged = 0
+            self.peakAccuracy = accuracy
+
     # Train model
-    def fit(self, trainData, trainLabels, epochs, batch_size, validation_data):
+    def fit(self, trainData, trainLabels, validation_data, epochs, batch_size=-1):
         self.history = self.metrics()
         self.importDataset(trainData,trainLabels,testData,testLabels)
         numTrain = len(trainData)
+        self.numConverged = 0
+        self.peakAccuracy = 0
         for epoch in range(epochs):
             print("Epoch " + str(epoch))
             self.validate()
@@ -136,6 +143,8 @@ class Sequential:
             self.history.train.accuracy.append(accuracy)
             self.history.train.loss.append(loss)
             print("Training\tAccuracy: " + f'{accuracy*100:.3f}' + "%\tLoss: " + f'{loss:.5f}')
+            if (self.numConverged == 3):
+                break
         return self.history
 
 
@@ -368,12 +377,12 @@ testData = np.true_divide(testData, max(np.max(trainData), np.max(testData)))
 
 #-----BUILD MODEL-----#
 model = Sequential()
-model.add(Dense(    10,     input_shape=784,    alpha=0.025,    beta=0      ))
-#model.add(Dense(    533,                        alpha=0.025,    beta=0      ))
-#model.add(Dense(    10,                         alpha=0.025,    beta=0      ))
+model.add(Dense(    10,     input_shape=784,    alpha=1,    beta=0  ))
+#model.add(Dense(    533,                        alpha=0.025,    beta=0.1    ))
+#model.add(Dense(    10,                         alpha=0.025,    beta=0.1    ))
 
 #-----TRAIN MODEL-----#
-history = model.fit(trainData, trainLabels, epochs=3, batch_size=60000, validation_data=(testData, testLabels))
+history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels))
 print(history)
 
 
