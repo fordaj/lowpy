@@ -2,7 +2,17 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
 import numpy as np
+import time
 
+# Start timer from 0
+def tic():
+    global t
+    t = time.time()
+
+# Lap timer
+def toc():
+    global t
+    print(time.time() - t)
 
 class Sequential:
     # Constructor for model initialization
@@ -114,10 +124,11 @@ class Sequential:
         testData = validation_data[0]
         testLabels = validation_data[1]
         self.importDataset(trainData,trainLabels,testData,testLabels)
-        numTrain = len(trainData)
+        numTrain = 1000#len(trainData)
         self.numConverged = 0
         self.peakAccuracy = 0
         self.describe()
+        tic()
         for epoch in range(epochs):
             if (self.verbose):
                 print("Epoch " + str(epoch))
@@ -142,5 +153,6 @@ class Sequential:
                 print("Training\tAccuracy: " + f'{accuracy*100:.3f}' + "%\tLoss: " + f'{loss:.5f}')
             if (self.numConverged == 5):
                 break
+        toc()
         self.epoch = epoch
         return self.history

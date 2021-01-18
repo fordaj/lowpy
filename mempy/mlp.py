@@ -1,11 +1,7 @@
-import pycuda.driver as cuda
-import pycuda.autoinit
-from pycuda.compiler import SourceModule
 import numpy as np
 import time
 from keras.datasets import mnist
 import numpy as np
-import math
 
 from sequential import Sequential
 from dense import Dense
@@ -32,10 +28,10 @@ trainData   = np.true_divide(trainData, max(np.max(trainData), np.max(testData))
 testData    = np.true_divide(testData,  max(np.max(trainData), np.max(testData)))
 #-----BUILD MODEL-----#
 model = Sequential()
-model.add(  Dense(  533,    input_shape=784,    alpha=0.025,    beta=0,     sigma_i=0   ))
-model.add(  Dense(  10,                         alpha=0.025,    beta=0,     sigma_i=0   ))
+model.add(  Dense(  10,    input_shape=784,    alpha=0.025,    beta=0,     sigma_i=0   ))
+#model.add(  Dense(  10,                         alpha=0.025,    beta=0,     sigma_i=0   ))
 #-----TRAIN MODEL-----#
-history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
+history = model.fit(trainData, trainLabels, epochs=10, batch_size=60000, validation_data=(testData, testLabels), verbose=True)
 
 
 

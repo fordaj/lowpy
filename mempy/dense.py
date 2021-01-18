@@ -3,7 +3,17 @@ import pycuda.autoinit
 from pycuda.compiler import SourceModule
 import numpy as np
 import math
+import time
 
+# Start timer from 0
+def tic():
+    global t
+    t = time.time()
+
+# Lap timer
+def toc():
+    global t
+    print(time.time() - t)
 
 
 class Dense:
@@ -64,12 +74,12 @@ class Dense:
         # Cuda programs
         self.program = SourceModule("""
         __global__ void propagate(
-            const int I,
-            const double *x,
-            const double *w,
-            const double *b,
-            double *y,
-            double *z
+            const   int I,
+            const   double * __restrict__   x,
+            const   double * __restrict__   w,
+            const   double * __restrict__   b,
+                    double * __restrict__   y,
+                    double * __restrict__   z
             ){
                 int j = blockIdx.x;
                 double sum = 0;
@@ -78,22 +88,22 @@ class Dense:
                 z[j] = 1/(1 + exp(-y[j]));
             }
         __global__ void backpropagate(
-                const int label,
-                double *dedz,
-                const double *z,
-                const int J_n,
-                double *w_n,
-                const double *dedz_n,
-                const double *dzdy_n,
-                double *dzdy,
-                const double alpha,
-                const int I,
-                double *b,
-                double *w,
-                const double *x,
-                const double beta,
-                double *vtb,
-                double *vtw
+            const   int                     label,
+                    double * __restrict__   dedz,
+            const   double * __restrict__   z,
+            const   int                     J_n,
+                    double * __restrict__   w_n,
+            const   double * __restrict__   dedz_n,
+            const   double * __restrict__   dzdy_n,
+                    double * __restrict__   dzdy,
+            const   double                  alpha,
+            const   int                     I,
+                    double * __restrict__   b,
+                    double * __restrict__   w,
+            const   double * __restrict__   x,
+            const   double                  beta,
+                    double * __restrict__   vtb,
+                    double * __restrict__   vtw
             ){
                 int j   = blockIdx.x;
                 int I_n = gridDim.x;
@@ -117,9 +127,9 @@ class Dense:
                 }
             }
         __global__ void argmax(
-                const int label,
-                const double *z,
-                double *hits
+                const   int                     label,
+                const   double * __restrict__   z,
+                        double *__restrict__    hits
             ){
                 int j = blockIdx.x;
                 if (j == 0){
@@ -139,6 +149,12 @@ class Dense:
                 }
             }
         """)
+        self.propagateFunction = self.program.get_function("propagate")
+        self.propagateFunction.prepare("PPPPPP")
+        self.backpropagateFunction = self.program.get_function("backpropagate")
+        self.backpropagateFunction.prepare("PPPPPPPPPPPPPPPP")
+        self.argmaxFunction = self.program.get_function("argmax")
+        self.argmaxFunction.prepare("PPP")
 
     # Link attributes from next layer into current layer
     def linkNextLayer(self, nextLayer):
@@ -178,8 +194,18 @@ class Dense:
 
     # Propagate 
     def propagate(self):
-        propagate = self.program.get_function("propagate")
-        propagate(
+        self.propagateFunction.prepared_call(
+            (self.J_h,1,1),
+            (1,1,1),
+            self.I_d, 
+            self.x_d, 
+            self.w_d, 
+            self.b_d, 
+            self.y_d, 
+            self.z_d
+        )
+        """
+        self.propagateFunction(
                 self.I_d, 
                 self.x_d, 
                 self.w_d, 
@@ -189,11 +215,31 @@ class Dense:
                 block=(1,1,1), 
                 grid=(self.J_h,1,1)
         )
+        """
 
     # Backpropagate
     def backpropagate(self, label=np.int32(-1)):
-        backpropagate = self.program.get_function("backpropagate")
-        backpropagate(
+        """self.backpropagateFunction.prepared_call(
+                (int(self.J_h),1,1),
+                (1,1,1), 
+                np.int32(label),
+                self.dedz_d,
+                self.z_d,
+                self.n_J_d,
+                self.n_w_d,
+                self.n_dedz_d,
+                self.n_dzdy_d,
+                self.dzdy_d,
+                self.alpha,
+                self.I_d,
+                self.b_d,
+                self.w_d,
+                self.x_d,
+                self.beta,
+                self.vtb_d,
+                self.vtw_d
+        )"""
+        self.backpropagateFunction(
                 label,
                 self.dedz_d,
                 self.z_d,
@@ -216,13 +262,20 @@ class Dense:
 
     # Find winning neuron
     def argmax(self, label, hits_d):
-        argmax = self.program.get_function("argmax")
-        argmax(
+        self.argmaxFunction.prepared_call(
+                (self.J_h,1,1),
+                (1,1,1),
+                label,
+                self.z_d,
+                hits_d
+        )
+        """
+        self.argmaxFunction(
                 label,
                 self.z_d,
                 hits_d,
                 block=(1,1,1), 
                 grid=(self.J_h,1,1)
         )
-
+        """
 
