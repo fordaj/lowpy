@@ -2,7 +2,11 @@ import numpy as np
 import time
 from keras.datasets import mnist
 import numpy as np
-
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.rcParams['backend'] = "WXAgg" #"Qt4Agg"
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
 from sequential import Sequential
 from dense import Dense
 
@@ -26,115 +30,83 @@ testLabels  = np.int32(testLabels)
 #-----NORMALIZE DATA-----#
 trainData   = np.true_divide(trainData, max(np.max(trainData), np.max(testData)))
 testData    = np.true_divide(testData,  max(np.max(trainData), np.max(testData)))
-#-----BUILD MODEL-----#
-model = Sequential()
-model.add(  Dense(  10,    input_shape=784,    alpha=0.025,    beta=0,     sigma_i=0   ))
-#model.add(  Dense(  10,                         alpha=0.025,    beta=0,     sigma_i=0   ))
-#-----TRAIN MODEL-----#
-history = model.fit(trainData, trainLabels, epochs=10, batch_size=60000, validation_data=(testData, testLabels), verbose=True)
+history = []
+#----GLOBAL PARAMETERS---#
+input_shape             = 784
+alpha                   = 0.025
+beta                    = 0
+sigma_i                 = 0.5
+weight_initialization   = "uniform"
+#--SIMULATION PARAMETERS-#
+epochs = 10
+batch_size = 60000
+tests_per_epoch = 5
+validation_data = (testData,testLabels)
+verbose = True
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-# 2LP Weight Initialization Sims
-variability = 0.75
-for i in range(5):
-    #-----BUILD MODEL-----#
+numSims = 6
+divideBy5 = True
+for s in range(numSims):
     model = Sequential()
-    model.add(Dense(533, input_shape=784, alpha=0.025, beta=0, sigma_i=variability))
-    model.add(Dense( 10,                  alpha=0.025, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
+    # Build Model
+    model.add(  
+        Dense(   
+            533,    
+            input_shape=input_shape,    
+            alpha=alpha,    
+            beta=beta,     
+            weight_initialization=weight_initialization, 
+            sigma_i=sigma_i   
+        )
+    )
+    model.add(  
+        Dense(   
+            10,      
+            alpha=alpha,    
+            beta=beta,     
+            weight_initialization=weight_initialization, 
+            sigma_i=sigma_i   
+        )
+    )
+    # Simulate Model
+    history.append(
+        model.fit(
+            trainData, 
+            trainLabels, 
+            epochs=epochs, 
+            batch_size=batch_size, 
+            tests_per_epoch=tests_per_epoch, 
+            validation_data=(testData, testLabels), 
+            verbose=True
+        )
+    )
+    # Change parameter
+    if(divideBy5):
+        sigma_i /= 5
+        divideBy5 = False
+    else:
+        sigma_i /= 2
+        divideBy5 = True
 
-variability = 0.5
-for i in range(5):
-    #-----BUILD MODEL-----#
-    model = Sequential()
-    model.add(Dense(533, input_shape=784, alpha=0.025, beta=0, sigma_i=variability))
-    model.add(Dense( 10,                  alpha=0.025, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
 
-variability = 0.25
-for i in range(5):
-    #-----BUILD MODEL-----#
-    model = Sequential()
-    model.add(Dense(533, input_shape=784, alpha=0.025, beta=0, sigma_i=variability))
-    model.add(Dense( 10,                  alpha=0.025, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
 
-variability = 0.1
-for i in range(5):
-    #-----BUILD MODEL-----#
-    model = Sequential()
-    model.add(Dense(533, input_shape=784, alpha=0.025, beta=0, sigma_i=variability))
-    model.add(Dense( 10,                  alpha=0.025, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
+plt.figure(figsize=(6, 4.5))
+for h in history:
+    plt.plot(h.test.iteration,h.test.accuracy, label=f'{h.sigma_i[0]:.3f}')
+plt.xlabel("Iterations")
+plt.ylabel("Accuracy")
+plt.title("2LP with Varied sigma_i")
+plt.legend(loc='lower right')
+plt.grid()
+plt.show()
+plt.savefig('2LPhjsadkf.png',dpi=1200)
 
-"""
-"""
-# 1LP Weight Initialization Sims
-variability = 0.75
-for i in range(5):
-    #-----BUILD MODEL-----#
-    model = Sequential()
-    model.add(Dense(10, input_shape=784, alpha=0.05, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
+print("done")
 
-variability = 0.5
-for i in range(5):
-    #-----BUILD MODEL-----#
-    model = Sequential()
-    model.add(Dense(10, input_shape=784, alpha=0.005, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
 
-variability = 0.25
-for i in range(5):
-    #-----BUILD MODEL-----#
-    model = Sequential()
-    model.add(Dense(10, input_shape=784, alpha=0.005, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
 
-variability = 0.1
-for i in range(5):
-    #-----BUILD MODEL-----#
-    model = Sequential()
-    model.add(Dense(10, input_shape=784, alpha=0.005, beta=0, sigma_i=variability))
-    #-----TRAIN MODEL-----#
-    history = model.fit(trainData, trainLabels, epochs=100, batch_size=60000, validation_data=(testData, testLabels), verbose=False)
-    print("Epochs Trained: " + str(model.epoch) + "\tPeak accuracy: " + str(model.peakAccuracy*100) + "%")
-    variability /= 10
-"""
+
+
 
 # Create the model
 # model = Sequential()

@@ -1,13 +1,13 @@
 #include <stdio.h>
+#include <chrono>
+#include <iostream>
 // Compile with:
 // nvcc -o example example.cu
-#define N 1000
+#define N 500000
 
 __global__ void add(int *a, int *b) {
     int i = blockIdx.x;
-    if (i<N) {
-        b[i] = 2*a[i];
-    }
+    b[i] = 2*a[i];
 }
 
 int main() {
@@ -27,13 +27,22 @@ int main() {
     cudaMemcpy(da, ha, N*sizeof(int), cudaMemcpyHostToDevice);
     // Launch GPU code with N threads, one per
     // array element.
-    add<<<N, 1>>>(da, db);
+
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < 100000; i++){
+        add<<<N, 1>>>(da, db);
+    }
+    auto finish = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = finish - start;
+    std::cout << "Elapsed Time: " << elapsed.count() << "ms" << std::endl;
+
+    
     // Copy output array from GPU back to CPU.
     cudaMemcpy(hb, db, N*sizeof(int), cudaMemcpyDeviceToHost);
 
-    for (int i = 0; i<N; ++i) {
-        printf("%d\n", hb[i]);
-    }
+    //for (int i = 0; i<N; ++i) {
+    //    printf("%d\n", hb[i]);
+    //}
 
     //
     // Free up the arrays on the GPU.

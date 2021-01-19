@@ -17,7 +17,7 @@ def toc():
 
 
     
-N = 2**22
+N = 69
 blockSize = 32
 gridSize = N/blockSize
 remaining = N

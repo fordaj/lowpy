@@ -18,12 +18,13 @@ def toc():
 
 class Dense:
     # Constructor for model initialization
-    def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, sigma_i=0):
-        self.I_h = input_shape
-        self.J_h = output_shape
-        self.alpha = np.float64(alpha)
-        self.beta = np.float64(beta)
-        self.sigma_i = np.float64(sigma_i)
+    def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, weight_initialization="normal", sigma_i=0):
+        self.I_h                    = input_shape
+        self.J_h                    = output_shape
+        self.alpha                  = np.float64(alpha)
+        self.beta                   = np.float64(beta)
+        self.weight_initialization  = weight_initialization
+        self.sigma_i                = np.float64(sigma_i)
 
     # Layer constructor
     def build(self,input_shape,output_shape):
@@ -36,17 +37,16 @@ class Dense:
         self.x_h        = np.ones(self.I_h,dtype=np.float64)
         self.x_d        = self.hostToDevice(self.x_h)
         # Weights
-        #self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
-        #self.w_h        = np.ones((self.J_h,self.I_h),dtype=np.float64) * 0.01
-        self.w_h        = np.random.normal(0,math.sqrt(2/784),(self.J_h,self.I_h)).astype(np.float64)
+        if (self.weight_initialization=="uniform"):
+            self.w_h    = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
+            self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
+        else:
+            self.w_h    = np.random.normal(0,math.sqrt(2/self.I_h),(self.J_h,self.I_h)).astype(np.float64)
+            self.b_h    = np.random.normal(0,math.sqrt(2/self.I_h),self.J_h).astype(np.float64)
         if (self.sigma_i > 0):
             self.w_h    = np.random.normal(self.w_h,self.sigma_i)
-        self.w_d        = self.hostToDevice(self.w_h)
-        #self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
-        #self.b_h        = np.ones(self.J_h,dtype=np.float64) * 0.01
-        self.b_h        = np.random.normal(0,math.sqrt(2/784),self.J_h).astype(np.float64)
-        if (self.sigma_i > 0):
             self.b_h    = np.random.normal(self.b_h,self.sigma_i)
+        self.w_d        = self.hostToDevice(self.w_h)
         self.b_d        = self.hostToDevice(self.b_h)
         # Momentum
         self.vtw_h      = np.zeros((self.J_h,self.I_h),dtype=np.float64)
@@ -73,13 +73,13 @@ class Dense:
         self.hits_d     = self.hostToDevice(self.hits_h)
         # Cuda programs
         self.program = SourceModule("""
-        __global__ void propagate(
-            const   int I,
-            const   double * __restrict__   x,
-            const   double * __restrict__   w,
-            const   double * __restrict__   b,
-                    double * __restrict__   y,
-                    double * __restrict__   z
+            __global__ void propagate(
+                const   int                     I,
+                const   double * __restrict__   x,
+                const   double * __restrict__   w,
+                const   double * __restrict__   b,
+                        double * __restrict__   y,
+                        double * __restrict__   z
             ){
                 int j = blockIdx.x;
                 double sum = 0;
@@ -87,23 +87,23 @@ class Dense:
                 y[j] = sum + b[j];
                 z[j] = 1/(1 + exp(-y[j]));
             }
-        __global__ void backpropagate(
-            const   int                     label,
-                    double * __restrict__   dedz,
-            const   double * __restrict__   z,
-            const   int                     J_n,
-                    double * __restrict__   w_n,
-            const   double * __restrict__   dedz_n,
-            const   double * __restrict__   dzdy_n,
-                    double * __restrict__   dzdy,
-            const   double                  alpha,
-            const   int                     I,
-                    double * __restrict__   b,
-                    double * __restrict__   w,
-            const   double * __restrict__   x,
-            const   double                  beta,
-                    double * __restrict__   vtb,
-                    double * __restrict__   vtw
+            __global__ void backpropagate(
+                const   int                     label,
+                        double * __restrict__   dedz,
+                const   double * __restrict__   z,
+                const   int                     J_n,
+                        double * __restrict__   w_n,
+                const   double * __restrict__   dedz_n,
+                const   double * __restrict__   dzdy_n,
+                        double * __restrict__   dzdy,
+                const   double                  alpha,
+                const   int                     I,
+                        double * __restrict__   b,
+                        double * __restrict__   w,
+                const   double * __restrict__   x,
+                const   double                  beta,
+                        double * __restrict__   vtb,
+                        double * __restrict__   vtw
             ){
                 int j   = blockIdx.x;
                 int I_n = gridDim.x;
@@ -126,10 +126,10 @@ class Dense:
                     vtw[j*I+i]  = beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[i];
                 }
             }
-        __global__ void argmax(
-                const   int                     label,
-                const   double * __restrict__   z,
-                        double *__restrict__    hits
+            __global__ void argmax(
+                    const   int                     label,
+                    const   double * __restrict__   z,
+                            double *__restrict__    hits
             ){
                 int j = blockIdx.x;
                 if (j == 0){
@@ -218,11 +218,12 @@ class Dense:
         """
 
     # Backpropagate
-    def backpropagate(self, label=np.int32(-1)):
-        """self.backpropagateFunction.prepared_call(
-                (int(self.J_h),1,1),
+    def backpropagate(self, label=-1):
+        """
+        self.backpropagateFunction.prepared_call(
+                (10,1,1),
                 (1,1,1), 
-                np.int32(label),
+                int(label),
                 self.dedz_d,
                 self.z_d,
                 self.n_J_d,
@@ -240,7 +241,7 @@ class Dense:
                 self.vtw_d
         )"""
         self.backpropagateFunction(
-                label,
+                np.int32(label),
                 self.dedz_d,
                 self.z_d,
                 self.n_J_d,
