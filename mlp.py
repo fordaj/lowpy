@@ -7,8 +7,7 @@ import matplotlib.pyplot as plt
 matplotlib.rcParams['backend'] = "WXAgg" #"Qt4Agg"
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
-from sequential import Sequential
-from dense import Dense
+import mempy as mp
 
 # Start timer from 0
 def tic():
@@ -44,13 +43,15 @@ tests_per_epoch = 5
 validation_data = (testData,testLabels)
 verbose = True
 
+
+
 numSims = 6
 divideBy5 = True
 for s in range(numSims):
-    model = Sequential()
+    model = mp.Sequential()
     # Build Model
     model.add(  
-        Dense(   
+        mp.Dense(   
             533,    
             input_shape=input_shape,    
             alpha=alpha,    
@@ -60,7 +61,7 @@ for s in range(numSims):
         )
     )
     model.add(  
-        Dense(   
+        mp.Dense(   
             10,      
             alpha=alpha,    
             beta=beta,     
