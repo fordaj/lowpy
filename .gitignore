@@ -2,3 +2,5 @@ lowpy.egg-info/
 .DS_Store
 lowpy/.vscode/
 lowpy/__pycache__/
+build/
+dist/
