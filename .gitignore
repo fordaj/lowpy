@@ -4,3 +4,4 @@ lowpy/.vscode/
 lowpy/__pycache__/
 build/
 dist/
+.vscode/
