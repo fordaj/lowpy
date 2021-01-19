@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 matplotlib.rcParams['backend'] = "WXAgg" #"Qt4Agg"
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
-import mempy as mp
+import lowpy as lp
 
 # Start timer from 0
 def tic():
@@ -48,10 +48,10 @@ verbose = True
 numSims = 6
 divideBy5 = True
 for s in range(numSims):
-    model = mp.Sequential()
+    model = lp.Sequential()
     # Build Model
     model.add(  
-        mp.Dense(   
+        lp.Dense(   
             533,    
             input_shape=input_shape,    
             alpha=alpha,    
@@ -61,7 +61,7 @@ for s in range(numSims):
         )
     )
     model.add(  
-        mp.Dense(   
+        lp.Dense(   
             10,      
             alpha=alpha,    
             beta=beta,     
