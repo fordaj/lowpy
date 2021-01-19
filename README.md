@@ -1,4 +1,4 @@
-# Welcome to LowPy Version 0.0.1!
+# Welcome to LowPy (Pre-release)!
 <p align="center"><img src="logo.png" height="100px"></p>
 
 **LowPy** is a high level GPU simulator of low level device characteristics in machine algorithms. It seeks to streamline the investigation process when considering memristive and other novel devices for implementing a machine learning algorithm in hardware. By using the familiar [Keras](https://keras.io) syntax, it will be second nature to write GPU-optimized code to push your algorithm to its limits.
