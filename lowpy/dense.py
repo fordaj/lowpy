@@ -4,6 +4,7 @@ from pycuda.compiler import SourceModule
 import numpy as np
 import math
 import time
+import pkg_resources
 
 # Start timer from 0
 def tic():
@@ -72,7 +73,7 @@ class Dense:
         self.hits_h     = np.zeros(self.J_h,dtype=np.float64)
         self.hits_d     = self.hostToDevice(self.hits_h)
         # Cuda programs
-        self.program = SourceModule(open("dense.cu").read())
+        self.program = SourceModule(open(pkg_resources.resource_filename('lowpy', 'dense.cu')).read())
         self.propagateFunction = self.program.get_function("propagate")
         self.propagateFunction.prepare("PPPPPP")
         self.backpropagateFunction = self.program.get_function("backpropagate")
