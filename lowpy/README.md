@@ -4,11 +4,12 @@ For version incrementing:
 ```
 python3 setup.py sdist bdist_wheel
 ```
-2. Post to PyPI
+2. Delete previous files in dist folder
+3. Post to PyPI
 ```
 python3 -m twine upload dist/*
 ```
-3. To upgrade:
+4. To upgrade:
 ```
 pip3 uninstall lowpy
 ...
