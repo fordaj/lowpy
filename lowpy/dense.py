@@ -75,11 +75,11 @@ class Dense:
         # Cuda programs
         self.program = SourceModule(open(pkg_resources.resource_filename('lowpy', 'dense.cu')).read())
         self.propagateFunction = self.program.get_function("propagate")
-        self.propagateFunction.prepare("PPPPPP")
+        #self.propagateFunction.prepare("PPPPPP")
         self.backpropagateFunction = self.program.get_function("backpropagate")
-        self.backpropagateFunction.prepare("PPPPPPPPPPPPPPPP")
+        #self.backpropagateFunction.prepare("PPPPPPPPPPPPPPPP")
         self.argmaxFunction = self.program.get_function("argmax")
-        self.argmaxFunction.prepare("PPP")
+        #self.argmaxFunction.prepare("PPP")
 
     # Link attributes from next layer into current layer
     def linkNextLayer(self, nextLayer):
@@ -119,7 +119,7 @@ class Dense:
 
     # Propagate 
     def propagate(self):
-        self.propagateFunction.prepared_call(
+        """self.propagateFunction.prepared_call(
             (self.J_h,1,1),
             (1,1,1),
             self.I_d, 
@@ -140,7 +140,7 @@ class Dense:
                 block=(1,1,1), 
                 grid=(self.J_h,1,1)
         )
-        """
+        
 
     # Backpropagate
     def backpropagate(self, label=-1):
@@ -188,14 +188,13 @@ class Dense:
 
     # Find winning neuron
     def argmax(self, label, hits_d):
-        self.argmaxFunction.prepared_call(
+        """self.argmaxFunction.prepared_call(
                 (self.J_h,1,1),
                 (1,1,1),
                 label,
                 self.z_d,
                 hits_d
-        )
-        """
+        )"""
         self.argmaxFunction(
                 label,
                 self.z_d,
@@ -203,5 +202,5 @@ class Dense:
                 block=(1,1,1), 
                 grid=(self.J_h,1,1)
         )
-        """
+        
 
