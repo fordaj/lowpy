@@ -28,15 +28,15 @@ class Sequential:
         self.numTrain   = 0
 
     # Function for appending layer objects to the model
-    def add(self,layer_type):
-        self.layer.append(layer_type)
+    def add(self,newLayer):
+        self.layer.append(newLayer)
         numLayers = len(self.layer)
-        if (numLayers == 1):
-            self.layer[0].build(self.layer[0].I_h,self.layer[0].J_h)
-        else:
+        if (numLayers == 1): # If this is the first layer added:
+            self.layer[0].build(self.layer[0].I_h,self.layer[0].J_h) # Run the build function with the user-specified input shape
+        else:   # Otherwise, run the build function with the previous layer's output length as the current input shape
             self.layer[numLayers-1].build(self.layer[numLayers-2].J_h,self.layer[numLayers-1].J_h)
-            self.layer[numLayers-1].linkPreviousLayer(self.layer[numLayers-2])
-            self.layer[numLayers-2].linkNextLayer(self.layer[numLayers-1])
+            self.layer[numLayers-1].linkPreviousLayer(self.layer[numLayers-2]) # Link the previous layer to the current one
+            self.layer[numLayers-2].linkNextLayer(self.layer[numLayers-1])     # Link the current layer to the previous one
         self.numLayers += 1
     
     # Copy all layer attributes from GPU to host
@@ -51,8 +51,8 @@ class Sequential:
         return device_variable
 
     # Forward pass
-    def propagate(self, input):
-        self.layer[0].x_d = input
+    def propagate(self, inputValues):
+        self.layer[0].x_d = inputValues
         for l in self.layer:
             l.propagate()
             
