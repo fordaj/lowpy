@@ -1,10 +1,10 @@
 ### Developer Note
 For version incrementing:
-1. Build distributions
+1. Delete dist and build folders
+2. Build distributions
 ```
 python3 setup.py sdist bdist_wheel
 ```
-2. Delete previous files in dist folder
 3. Post to PyPI
 ```
 python3 -m twine upload dist/*
