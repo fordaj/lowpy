@@ -15,3 +15,4 @@ pip3 uninstall lowpy
 ...
 pip3 install lowpy
 ```
+Note: May have to wait a few seconds for the new files to upload to PyPI.
