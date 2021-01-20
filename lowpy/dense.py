@@ -5,6 +5,7 @@ import numpy as np
 import math
 import time
 import lowpy as lp
+import os.path
 # For importing the .cu file from the lowpy package:
 try:
     import importlib.resources as pkg_resources
@@ -79,9 +80,13 @@ class Dense:
         self.hits_h     = np.zeros(self.J_h,dtype=np.float64)
         self.hits_d     = self.hostToDevice(self.hits_h)
         # Cuda programs
-        try:
+        # try:
+        #     self.program = SourceModule(open('lowpy/dense.cu','r').read())
+        # except FileNotFoundError:
+        #     self.program = SourceModule(pkg_resources.read_text(lp, 'dense.cu'))
+        if os.path.isfile('lowpy/dense.cu'):# Differentiates between package cuda file and local
             self.program = SourceModule(open('lowpy/dense.cu','r').read())
-        except FileNotFoundError:
+        else:
             self.program = SourceModule(pkg_resources.read_text(lp, 'dense.cu'))
         self.propagateFunction = self.program.get_function("propagate")
         self.propagateFunction.prepare("PPPPPP")
