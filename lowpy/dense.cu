@@ -57,10 +57,11 @@ __global__ void argmax(
                 double *__restrict__    hits
 ){
     int j = blockIdx.x;
+    int J = gridDim.x;
     if (j == 0){
         double maxVal = 0;
         int maxIdx = 0;
-        for (int i = 0; i < 10; i++){
+        for (int i = 0; i < J; i++){
             if (z[i] > maxVal){
                 maxIdx = i;
                 maxVal = z[i];

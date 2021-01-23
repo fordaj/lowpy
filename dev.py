@@ -32,10 +32,10 @@ testData    = np.true_divide(testData,  max(np.max(trainData), np.max(testData))
 history = []
 #----GLOBAL PARAMETERS---#
 input_shape             = 784
-alpha                   = 0.025
+alpha                   = 0.01
 beta                    = 0
-sigma_i                 = 0.5
-weight_initialization   = "uniform"
+sigma_i                 = 0
+weight_initialization   = "normal"
 #--SIMULATION PARAMETERS-#
 epochs = 10
 batch_size = 60000

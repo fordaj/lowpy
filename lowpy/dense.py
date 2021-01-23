@@ -1,6 +1,7 @@
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
+import pycuda.gpuarray as gpuarray
 import numpy as np
 import math
 import time
@@ -18,6 +19,13 @@ def toc():
 
 
 class Dense:
+    # GPU functors
+    class functors:
+        def __init__(self):
+            self.propagate      = None
+            self.backpropagate  = None
+            self.argmax         = None
+
     # Constructor for model initialization
     def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, weight_initialization="normal", sigma_i=0):
         self.I_h                    = input_shape
@@ -26,6 +34,8 @@ class Dense:
         self.beta                   = np.float64(beta)
         self.weight_initialization  = weight_initialization
         self.sigma_i                = np.float64(sigma_i)
+        self.gpu                    = self.functors()
+    
 
     # Layer constructor
     def build(self,input_shape,output_shape):
@@ -39,14 +49,14 @@ class Dense:
         self.x_d        = self.hostToDevice(self.x_h)
         # Weights
         if (self.weight_initialization=="uniform"):
-            self.w_h    = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
+            self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
             self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
         else:
-            self.w_h    = np.random.normal(0,math.sqrt(2/self.I_h),(self.J_h,self.I_h)).astype(np.float64)
-            self.b_h    = np.random.normal(0,math.sqrt(2/self.I_h),self.J_h).astype(np.float64)
+            self.w_h        = np.random.normal(0,math.sqrt(2/self.I_h),(self.J_h,self.I_h)).astype(np.float64)
+            self.b_h        = np.random.normal(0,math.sqrt(2/self.I_h),self.J_h).astype(np.float64)
         if (self.sigma_i > 0):
-            self.w_h    = np.random.normal(self.w_h,self.sigma_i)
-            self.b_h    = np.random.normal(self.b_h,self.sigma_i)
+            self.w_h        = np.random.normal(self.w_h,self.sigma_i)
+            self.b_h        = np.random.normal(self.b_h,self.sigma_i)
         self.w_d        = self.hostToDevice(self.w_h)
         self.b_d        = self.hostToDevice(self.b_h)
         # Momentum
@@ -73,13 +83,13 @@ class Dense:
         self.hits_h     = np.zeros(self.J_h,dtype=np.float64)
         self.hits_d     = self.hostToDevice(self.hits_h)
         # Cuda programs
-        self.program = SourceModule(open(pkg_resources.resource_filename('lowpy', 'dense.cu')).read())
-        self.propagateFunction = self.program.get_function("propagate")
-        #self.propagateFunction.prepare("PPPPPP")
-        self.backpropagateFunction = self.program.get_function("backpropagate")
-        #self.backpropagateFunction.prepare("PPPPPPPPPPPPPPPP")
-        self.argmaxFunction = self.program.get_function("argmax")
-        #self.argmaxFunction.prepare("PPP")
+        self.program            = SourceModule(open(pkg_resources.resource_filename('lowpy', 'dense.cu')).read())
+        self.gpu.propagate      = self.program.get_function("propagate")
+        self.gpu.propagate.prepare("PPPPPP")
+        self.gpu.backpropagate  = self.program.get_function("backpropagate")
+        self.gpu.backpropagate.prepare("iPPPPPPPdPPPPdPP")
+        self.gpu.argmax         = self.program.get_function("argmax")
+        self.gpu.argmax.prepare("iPP")
 
     # Link attributes from next layer into current layer
     def linkNextLayer(self, nextLayer):
@@ -119,7 +129,7 @@ class Dense:
 
     # Propagate 
     def propagate(self):
-        """self.propagateFunction.prepared_call(
+        self.gpu.propagate.prepared_call(
             (self.J_h,1,1),
             (1,1,1),
             self.I_d, 
@@ -129,78 +139,38 @@ class Dense:
             self.y_d, 
             self.z_d
         )
-        """
-        self.propagateFunction(
-                self.I_d, 
-                self.x_d, 
-                self.w_d, 
-                self.b_d, 
-                self.y_d, 
-                self.z_d,
-                block=(1,1,1), 
-                grid=(self.J_h,1,1)
-        )
-        
 
     # Backpropagate
     def backpropagate(self, label=-1):
-        """
-        self.backpropagateFunction.prepared_call(
-                (10,1,1),
-                (1,1,1), 
-                int(label),
-                self.dedz_d,
-                self.z_d,
-                self.n_J_d,
-                self.n_w_d,
-                self.n_dedz_d,
-                self.n_dzdy_d,
-                self.dzdy_d,
-                self.alpha,
-                self.I_d,
-                self.b_d,
-                self.w_d,
-                self.x_d,
-                self.beta,
-                self.vtb_d,
-                self.vtw_d
-        )"""
-        self.backpropagateFunction(
-                np.int32(label),
-                self.dedz_d,
-                self.z_d,
-                self.n_J_d,
-                self.n_w_d,
-                self.n_dedz_d,
-                self.n_dzdy_d,
-                self.dzdy_d,
-                self.alpha,
-                self.I_d,
-                self.b_d,
-                self.w_d,
-                self.x_d,
-                self.beta,
-                self.vtb_d,
-                self.vtw_d,
-                block=(1,1,1), 
-                grid=(self.J_h,1,1)
+        self.gpu.backpropagate.prepared_call(
+            (self.J_h,1,1),
+            (1,1,1), 
+            np.int32(label),
+            self.dedz_d,
+            self.z_d,
+            self.n_J_d,
+            self.n_w_d,
+            self.n_dedz_d,
+            self.n_dzdy_d,
+            self.dzdy_d,
+            np.float64(self.alpha),
+            self.I_d,
+            self.b_d,
+            self.w_d,
+            self.x_d,
+            np.float64(self.beta),
+            self.vtb_d,
+            self.vtw_d
         )
 
     # Find winning neuron
     def argmax(self, label, hits_d):
-        """self.argmaxFunction.prepared_call(
-                (self.J_h,1,1),
-                (1,1,1),
-                label,
-                self.z_d,
-                hits_d
-        )"""
-        self.argmaxFunction(
-                label,
-                self.z_d,
-                hits_d,
-                block=(1,1,1), 
-                grid=(self.J_h,1,1)
+        self.gpu.argmax.prepared_call(
+            (self.J_h,1,1),
+            (1,1,1),
+            np.int32(label),
+            self.z_d,
+            hits_d
         )
         
 
