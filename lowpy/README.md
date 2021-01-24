@@ -2,16 +2,17 @@
 Notes relating to package development.
 
 # Version incrementing
-1. Delete dist and build folders
-2. Build distributions
+1. Increment the version in setup.py
+2. Delete dist and build folders
+3. Build distributions
 ```
 python3 setup.py sdist bdist_wheel
 ```
-3. Post to PyPI
+4. Post to PyPI
 ```
 python3 -m twine upload dist/*
 ```
-4. To upgrade, enter the current version as an argument in pip3:
+5. To upgrade, enter the current version as an argument in pip3:
 ```
 pip3 install lowpy==1.0.0
 ```
