@@ -2,6 +2,7 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
 import pycuda.gpuarray as gpuarray
+import pycuda.curandom as curand
 import numpy as np
 import math
 import time
@@ -28,149 +29,118 @@ class Dense:
 
     # Constructor for model initialization
     def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, weight_initialization="normal", sigma_i=0):
-        self.I_h                    = input_shape
-        self.J_h                    = output_shape
-        self.alpha                  = np.float64(alpha)
-        self.beta                   = np.float64(beta)
+        self.I                      = input_shape
+        self.J                      = output_shape
+        self.alpha                  = alpha
+        self.beta                   = beta
         self.weight_initialization  = weight_initialization
-        self.sigma_i                = np.float64(sigma_i)
+        self.sigma_i                = sigma_i
         self.gpu                    = self.functors()
-    
 
     # Layer constructor
     def build(self,input_shape,output_shape):
         # Layer dimensions
-        self.I_h        = input_shape
-        self.I_d        = np.int32(self.I_h)
-        self.J_h        = output_shape
-        self.J_d        = np.int32(self.J_h)
+        self.I          = input_shape
+        self.J          = output_shape
         # Input
-        self.x_h        = np.ones(self.I_h,dtype=np.float64)
-        self.x_d        = self.hostToDevice(self.x_h)
+        self.x          = gpuarray.zeros(self.I,dtype=np.float64)
         # Weights
         if (self.weight_initialization=="uniform"):
-            self.w_h        = np.random.rand(self.J_h,self.I_h).astype(np.float64) * 2 - 1
-            self.b_h        = np.random.rand(self.J_h).astype(np.float64) * 2 - 1
+            self.w          = np.random.rand(self.J,self.I).astype(np.float64) * 2 - 1
+            self.b          = np.random.rand(self.J).astype(np.float64) * 2 - 1
         else:
-            self.w_h        = np.random.normal(0,math.sqrt(2/self.I_h),(self.J_h,self.I_h)).astype(np.float64)
-            self.b_h        = np.random.normal(0,math.sqrt(2/self.I_h),self.J_h).astype(np.float64)
+            self.w          = np.random.normal(0,math.sqrt(2/self.I),(self.J,self.I)).astype(np.float64)
+            self.b          = np.random.normal(0,math.sqrt(2/self.I),self.J).astype(np.float64)
         if (self.sigma_i > 0):
-            self.w_h        = np.random.normal(self.w_h,self.sigma_i)
-            self.b_h        = np.random.normal(self.b_h,self.sigma_i)
-        self.w_d        = self.hostToDevice(self.w_h)
-        self.b_d        = self.hostToDevice(self.b_h)
+            self.w          = np.random.normal(self.w,self.sigma_i)
+            self.b          = np.random.normal(self.b,self.sigma_i)
+        self.w          = gpuarray.to_gpu(self.w)
+        self.b          = gpuarray.to_gpu(self.b)
         # Momentum
-        self.vtw_h      = np.zeros((self.J_h,self.I_h),dtype=np.float64)
-        self.vtw_d      = self.hostToDevice(self.vtw_h)
-        self.vtb_h      = np.zeros(self.J_h,dtype=np.float64)
-        self.vtb_d      = self.hostToDevice(self.vtb_h)
+        self.vtw        = gpuarray.zeros((self.J,self.I),dtype=np.float64)
+        self.vtb        = gpuarray.zeros(self.J,dtype=np.float64)
         # Outputs
-        self.y_h        = np.zeros(self.J_h,dtype=np.float64)
-        self.y_d        = self.hostToDevice(self.y_h)
-        self.z_h        = np.zeros(self.J_h,dtype=np.float64)
-        self.z_d        = self.hostToDevice(self.z_h)
+        self.y          = gpuarray.zeros(self.J,dtype=np.float64)
+        self.z          = gpuarray.zeros(self.J,dtype=np.float64)
         # Gradients
-        self.dedz_h     = np.zeros(self.J_h,dtype=np.float64)
-        self.dedz_d     = self.hostToDevice(self.dedz_h)
-        self.dzdy_h     = np.zeros(self.J_h,dtype=np.float64)
-        self.dzdy_d     = self.hostToDevice(self.dzdy_h)
+        self.dedz       = gpuarray.zeros(self.J,dtype=np.float64)
+        self.dzdy       = gpuarray.zeros(self.J,dtype=np.float64)
         # Next layer attributes
-        self.n_J_d      = self.J_d
-        self.n_w_d      = self.w_d
-        self.n_z_d      = self.z_d
-        self.n_dedz_d   = self.dedz_d
-        self.n_dzdy_d   = self.dzdy_d
-        self.hits_h     = np.zeros(self.J_h,dtype=np.float64)
-        self.hits_d     = self.hostToDevice(self.hits_h)
-        # Cuda programs
+        self.n_J        = self.J
+        self.n_w        = self.w
+        self.n_z        = self.z
+        self.n_dedz     = self.dedz
+        self.n_dzdy     = self.dzdy
+        self.hits       = gpuarray.zeros(self.J,dtype=np.float64)
+        # Cuda kernels
         self.program            = SourceModule(open(pkg_resources.resource_filename('lowpy', 'dense.cu')).read())
         self.gpu.propagate      = self.program.get_function("propagate")
-        self.gpu.propagate.prepare("PPPPPP")
         self.gpu.backpropagate  = self.program.get_function("backpropagate")
-        self.gpu.backpropagate.prepare("iPPPPPPPdPPPPdPP")
         self.gpu.argmax         = self.program.get_function("argmax")
+        self.gpu.propagate.prepare("iPPPPP")
+        self.gpu.backpropagate.prepare("iPPiPPPPdiPPPdPP")
         self.gpu.argmax.prepare("iPP")
 
     # Link attributes from next layer into current layer
     def linkNextLayer(self, nextLayer):
-        self.n_J_d      = nextLayer.J_d
-        self.n_w_d      = nextLayer.w_d
-        self.n_z_d      = nextLayer.z_d
-        self.n_dedz_d   = nextLayer.dedz_d
-        self.n_dzdy_d   = nextLayer.dzdy_d
+        self.n_J        = nextLayer.J
+        self.n_w        = nextLayer.w
+        self.n_z        = nextLayer.z
+        self.n_dedz     = nextLayer.dedz
+        self.n_dzdy     = nextLayer.dzdy
 
     # Set inputs of current layer equal to outputs of previous layer
     def linkPreviousLayer(self, previousLayer):
-        self.x_d    = previousLayer.z_d
-
-    # Copy layer attributes from GPU back to host
-    def deviceToHost(self):
-        cuda.memcpy_dtoh(   self.x_h,       self.x_d    )
-        cuda.memcpy_dtoh(   self.w_h,       self.w_d    )
-        cuda.memcpy_dtoh(   self.b_h,       self.b_d    )
-        cuda.memcpy_dtoh(   self.y_h,       self.y_d    )
-        cuda.memcpy_dtoh(   self.z_h,       self.z_d    )
-        cuda.memcpy_dtoh(   self.dedz_h,    self.dedz_d )
-        cuda.memcpy_dtoh(   self.dzdy_h,    self.dzdy_d )
-        cuda.memcpy_dtoh(   self.hits_h,    self.hits_d )
-        cuda.memcpy_dtoh(   self.vtb_h,     self.vtb_d  )
-        cuda.memcpy_dtoh(   self.vtw_h,     self.vtw_d  )
-
-    #Copy variables from host to GPU
-    def hostToDevice(self,host_variable):
-        device_variable = cuda.mem_alloc(host_variable.nbytes)
-        cuda.memcpy_htod(device_variable, host_variable)
-        return device_variable
+        self.x  = previousLayer.z
 
     # Reset the hit counter
     def resetHits(self):
-        self.hits_h = np.zeros(self.J_h,dtype=np.float64)
-        self.hits_d = self.hostToDevice(self.hits_h)
+        self.hits = gpuarray.zeros(self.J,dtype=np.float64)
 
     # Propagate 
     def propagate(self):
         self.gpu.propagate.prepared_call(
-            (self.J_h,1,1),
+            (self.J,1,1),
             (1,1,1),
-            self.I_d, 
-            self.x_d, 
-            self.w_d, 
-            self.b_d, 
-            self.y_d, 
-            self.z_d
+            np.int32(self.I), 
+            self.x.gpudata, 
+            self.w.gpudata, 
+            self.b.gpudata, 
+            self.y.gpudata, 
+            self.z.gpudata
         )
 
     # Backpropagate
     def backpropagate(self, label=-1):
         self.gpu.backpropagate.prepared_call(
-            (self.J_h,1,1),
+            (self.J,1,1),
             (1,1,1), 
             np.int32(label),
-            self.dedz_d,
-            self.z_d,
-            self.n_J_d,
-            self.n_w_d,
-            self.n_dedz_d,
-            self.n_dzdy_d,
-            self.dzdy_d,
+            self.dedz.gpudata,
+            self.z.gpudata,
+            np.int32(self.n_J),
+            self.n_w.gpudata,
+            self.n_dedz.gpudata,
+            self.n_dzdy.gpudata,
+            self.dzdy.gpudata,
             np.float64(self.alpha),
-            self.I_d,
-            self.b_d,
-            self.w_d,
-            self.x_d,
+            np.int32(self.I),
+            self.b.gpudata,
+            self.w.gpudata,
+            self.x.gpudata,
             np.float64(self.beta),
-            self.vtb_d,
-            self.vtw_d
+            self.vtb.gpudata,
+            self.vtw.gpudata
         )
 
     # Find winning neuron
-    def argmax(self, label, hits_d):
+    def argmax(self, label, hits):
         self.gpu.argmax.prepared_call(
-            (self.J_h,1,1),
+            (self.J,1,1),
             (1,1,1),
             np.int32(label),
-            self.z_d,
-            hits_d
+            self.z.gpudata,
+            hits.gpudata
         )
         
 

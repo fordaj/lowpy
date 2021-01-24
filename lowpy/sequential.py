@@ -1,6 +1,7 @@
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
+import pycuda.gpuarray as gpuarray
 import numpy as np
 import time
 from progress.bar import Bar
@@ -32,27 +33,16 @@ class Sequential:
         self.layer.append(newLayer)
         numLayers = len(self.layer)
         if (numLayers == 1):                                                # If this is the first layer added:
-            self.layer[0].build(self.layer[0].I_h,self.layer[0].J_h)        # Run the build function with the user-specified input shape
+            self.layer[0].build(self.layer[0].I,self.layer[0].J)        # Run the build function with the user-specified input shape
         else:                                                               # Otherwise, run the build function with the previous layer's output length as the current input shape
-            self.layer[numLayers-1].build(self.layer[numLayers-2].J_h,self.layer[numLayers-1].J_h)
+            self.layer[numLayers-1].build(self.layer[numLayers-2].J,self.layer[numLayers-1].J)
             self.layer[numLayers-1].linkPreviousLayer(self.layer[numLayers-2]) # Link the previous layer to the current one
             self.layer[numLayers-2].linkNextLayer(self.layer[numLayers-1])     # Link the current layer to the previous one
         self.numLayers += 1
-    
-    # Copy all layer attributes from GPU to host
-    def deviceToHost(self):
-        for l in self.layer:
-            l.deviceToHost()
-
-    #Copy variables from host to GPU
-    def hostToDevice(self,host_variable):
-        device_variable = cuda.mem_alloc(host_variable.nbytes)
-        cuda.memcpy_htod(device_variable, host_variable)
-        return device_variable
 
     # Forward pass
     def propagate(self, inputValues):
-        self.layer[0].x_d = inputValues
+        self.layer[0].x = inputValues
         for l in self.layer:
             l.propagate()
             
@@ -71,7 +61,7 @@ class Sequential:
         print("---------------------------------------------------------------")
         print ("{:<7} {:<11} {:<15} {:<15} {:<12}".format("Type", "Neurons", "Learning Rate", "Momentum Rate","Variability"))
         for l in self.layer:
-            print ("{:<7} {:<11} {:<15} {:<15} {:<12}".format("Dense", str(l.I_h)+"->"+str(l.J_h), f'{l.alpha:.5f}', f'{l.beta:.5f}', f'{l.sigma_i:.5f}'))
+            print ("{:<7} {:<11} {:<15} {:<15} {:<12}".format("Dense", str(l.I)+"->"+str(l.J), f'{l.alpha:.5f}', f'{l.beta:.5f}', f'{l.sigma_i:.5f}'))
         print("---------------------------------------------------------------")
 
     # Track model data
@@ -99,12 +89,12 @@ class Sequential:
         print()
         bar = Bar('Importing dataset', max=int((numTrain+numTest)/1000), suffix='%(percent)d%%')
         for i in range(numTrain):
-            self.trainData_d.append(self.hostToDevice(trainData[i]))
+            self.trainData_d.append(gpuarray.to_gpu(trainData[i]))
             if (i%1000 == 1):
                 bar.next()
         self.trainLabels_d = np.int32(trainLabels)
         for i in range(numTest):
-            self.testData_d.append(self.hostToDevice(testData[i]))
+            self.testData_d.append(gpuarray.to_gpu(testData[i]))
             if (i%1000 == 1):
                 bar.next()
         bar.finish()
@@ -114,14 +104,13 @@ class Sequential:
     # Test model
     def validate(self):
         numTests = len(self.testData_d)
-        testHits_h = np.zeros(3,dtype=np.float64)
-        testHits_d = self.hostToDevice(testHits_h)
+        testHits = gpuarray.zeros(3,dtype=np.float64)
         self.layer[self.numLayers-1].resetHits()
         for i in range(numTests):
             self.propagate(self.testData_d[i])
-            self.inference(self.testLabels_d[i], testHits_d)
-        cuda.memcpy_dtoh(testHits_h, testHits_d)
-        accuracy = testHits_h[0]/numTests
+            self.inference(self.testLabels_d[i], testHits)
+        testHits = testHits.get()
+        accuracy = testHits[0]/numTests
         loss = 1-accuracy
         self.history.test.accuracy.append(accuracy)
         self.history.test.loss.append(loss)
@@ -153,21 +142,16 @@ class Sequential:
         for self.epoch in range(epochs):
             if (self.verbose):
                 print("  " + str(self.epoch))
-            trainHits_h = np.zeros(3,dtype=np.float64)
-            trainHits_d = self.hostToDevice(trainHits_h)
+            trainHits = gpuarray.zeros(3,dtype=np.float64)
             self.layer[self.numLayers-1].resetHits()
             for self.i in range(self.numTrain):
                 if (self.i%(int(self.numTrain/tests_per_epoch))==0):
                     self.validate()
-                #self.deviceToHost()
                 self.propagate(self.trainData_d[self.i])
-                #self.deviceToHost()
                 self.backpropagate(self.trainLabels_d[self.i])
-                #self.deviceToHost()
-                self.inference(self.trainLabels_d[self.i],trainHits_d)
-            self.deviceToHost()
-            cuda.memcpy_dtoh(trainHits_h, trainHits_d)
-            accuracy = trainHits_h[0]/self.numTrain
+                self.inference(self.trainLabels_d[self.i],trainHits)
+            trainHits = trainHits.get()
+            accuracy = trainHits[0]/self.numTrain
             loss = 1 - accuracy
             self.history.train.accuracy.append(accuracy)
             self.history.train.loss.append(loss)
