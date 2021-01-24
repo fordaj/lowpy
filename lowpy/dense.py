@@ -56,6 +56,8 @@ class Dense:
             self.b          = np.random.normal(self.b,self.sigma_i)
         self.w          = gpuarray.to_gpu(self.w)
         self.b          = gpuarray.to_gpu(self.b)
+        #self.w = gpuarray.zeros((self.J,self.I),dtype=np.float64) + 0.01
+        #self.b = gpuarray.zeros(self.J,dtype=np.float64) + 0.01
         # Momentum
         self.vtw        = gpuarray.zeros((self.J,self.I),dtype=np.float64)
         self.vtb        = gpuarray.zeros(self.J,dtype=np.float64)
@@ -77,8 +79,8 @@ class Dense:
         self.gpu.propagate      = self.program.get_function("propagate")
         self.gpu.backpropagate  = self.program.get_function("backpropagate")
         self.gpu.argmax         = self.program.get_function("argmax")
-        self.gpu.propagate.prepare("iPPPPP")
-        self.gpu.backpropagate.prepare("iPPiPPPPdiPPPdPP")
+        self.gpu.propagate.prepare("iiPPPPP")
+        self.gpu.backpropagate.prepare("iiPPiPPPPdiPPPdPP")
         self.gpu.argmax.prepare("iPP")
 
     # Link attributes from next layer into current layer
@@ -98,11 +100,12 @@ class Dense:
         self.hits = gpuarray.zeros(self.J,dtype=np.float64)
 
     # Propagate 
-    def propagate(self):
+    def propagate(self,iteration=-1):
         self.gpu.propagate.prepared_call(
             (self.J,1,1),
             (1,1,1),
             np.int32(self.I), 
+            np.int32(iteration),
             self.x.gpudata, 
             self.w.gpudata, 
             self.b.gpudata, 
@@ -111,10 +114,11 @@ class Dense:
         )
 
     # Backpropagate
-    def backpropagate(self, label=-1):
+    def backpropagate(self,iteration=-1,label=-1):
         self.gpu.backpropagate.prepared_call(
             (self.J,1,1),
             (1,1,1), 
+            np.int32(iteration),
             np.int32(label),
             self.dedz.gpudata,
             self.z.gpudata,

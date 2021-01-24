@@ -32,7 +32,7 @@ testData    = np.true_divide(testData,  max(np.max(trainData), np.max(testData))
 history = []
 #----GLOBAL PARAMETERS---#
 input_shape             = 784
-alpha                   = 0.01
+alpha                   = 0.05
 beta                    = 0
 sigma_i                 = 0
 weight_initialization   = "normal"

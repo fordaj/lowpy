@@ -1,5 +1,8 @@
+#include <stdio.h>
+
 __global__ void propagate(
     const   int                     I,
+    const   int                     iteration,
     const   double * __restrict__   x,
     const   double * __restrict__   w,
     const   double * __restrict__   b,
@@ -8,11 +11,16 @@ __global__ void propagate(
 ){
     int j = blockIdx.x;
     double sum = 0;
-    for (int i = 0; i < I; i++) sum += x[i]*w[j*I+i];
+    int inputIdx = 0;
+    if (iteration > -1){
+        inputIdx = iteration * I;
+    }
+    for (int i = 0; i < I; i++) sum += x[inputIdx+i]*w[j*I+i];
     y[j] = sum + b[j];
     z[j] = 1/(1 + exp(-y[j]));
 }
 __global__ void backpropagate(
+    const   int                     iteration,
     const   int                     label,
             double * __restrict__   dedz,
     const   double * __restrict__   z,
@@ -32,6 +40,10 @@ __global__ void backpropagate(
 ){
     int j   = blockIdx.x;
     int I_n = gridDim.x;
+    int inputIdx = 0;
+    if (iteration > -1){
+        inputIdx = iteration * I;
+    }
     if (label > -1){
         if (j == label){
             dedz[j] = z[j] - 1;
@@ -46,9 +58,10 @@ __global__ void backpropagate(
     dzdy[j] = z[j] * (1 - z[j]);
     b[j]   -= (beta * vtb[j] + alpha * dedz[j] * dzdy[j]);
     vtb[j]  = beta * vtb[j] + alpha * dedz[j] * dzdy[j];
+
     for (int i = 0; i < I; i++){
-        w[j*I+i]   -= (beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[i]);
-        vtw[j*I+i]  = beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[i];
+        w[j*I+i]    -= (beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[inputIdx+i]);
+        vtw[j*I+i]  = beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[inputIdx+i];
     }
 }
 __global__ void argmax(
