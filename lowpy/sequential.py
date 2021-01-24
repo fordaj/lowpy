@@ -6,8 +6,6 @@ import numpy as np
 import time
 from progress.bar import Bar
 
-
-
 # Start timer from 0
 def tic():
     global t
@@ -82,35 +80,34 @@ class Sequential:
     def importDataset(self,trainData,trainLabels,testData,testLabels):
         numTrain = len(trainData)
         numTest = len(testData)
-        self.trainData_d     = []
-        self.trainLabels_d   = []
-        self.testData_d      = []
-        self.testLabels_d    = []
+        self.trainData       = []
+        self.trainLabels     = []
+        self.testData        = []
+        self.testLabels      = []
         print()
         bar = Bar('Importing dataset', max=int((numTrain+numTest)/1000), suffix='%(percent)d%%')
         for i in range(numTrain):
-            self.trainData_d.append(gpuarray.to_gpu(trainData[i]))
+            self.trainData.append(gpuarray.to_gpu(trainData[i]))
             if (i%1000 == 1):
                 bar.next()
-        self.trainLabels_d = np.int32(trainLabels)
+        self.trainLabels = np.int32(trainLabels)
         for i in range(numTest):
-            self.testData_d.append(gpuarray.to_gpu(testData[i]))
+            self.testData.append(gpuarray.to_gpu(testData[i]))
             if (i%1000 == 1):
                 bar.next()
         bar.finish()
         print()
-        self.testLabels_d = np.int32(testLabels)
+        self.testLabels = np.int32(testLabels)
 
     # Test model
     def validate(self):
-        numTests = len(self.testData_d)
+        numTests = len(self.testData)
         testHits = gpuarray.zeros(3,dtype=np.float64)
         self.layer[self.numLayers-1].resetHits()
         for i in range(numTests):
-            self.propagate(self.testData_d[i])
-            self.inference(self.testLabels_d[i], testHits)
-        testHits = testHits.get()
-        accuracy = testHits[0]/numTests
+            self.propagate(self.testData[i])
+            self.inference(self.testLabels[i], testHits)
+        accuracy = testHits.get()[0]/numTests
         loss = 1-accuracy
         self.history.test.accuracy.append(accuracy)
         self.history.test.loss.append(loss)
@@ -147,11 +144,10 @@ class Sequential:
             for self.i in range(self.numTrain):
                 if (self.i%(int(self.numTrain/tests_per_epoch))==0):
                     self.validate()
-                self.propagate(self.trainData_d[self.i])
-                self.backpropagate(self.trainLabels_d[self.i])
-                self.inference(self.trainLabels_d[self.i],trainHits)
-            trainHits = trainHits.get()
-            accuracy = trainHits[0]/self.numTrain
+                self.propagate(self.trainData[self.i])
+                self.backpropagate(self.trainLabels[self.i])
+                self.inference(self.trainLabels[self.i],trainHits)
+            accuracy = trainHits.get()[0]/self.numTrain
             loss = 1 - accuracy
             self.history.train.accuracy.append(accuracy)
             self.history.train.loss.append(loss)
