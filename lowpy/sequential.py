@@ -104,8 +104,8 @@ class Sequential:
             os.mkdir(self.testDir)
         class trialData:
             def __init__(self):
-                self.accuracy   = pd.DataFrame(columns=np.arange(11))
-                self.loss       = pd.DataFrame(columns=np.arange(11))
+                self.accuracy   = pd.DataFrame()
+                self.loss       = pd.DataFrame()
 
     # Import dataset
     def importDataset(self,trainData,trainLabels,testData,testLabels):
@@ -173,6 +173,10 @@ class Sequential:
                 self.inference(self.trainLabels[self.i],self.trainHits)
             accuracy = self.trainHits.get()/self.numTrain
             loss = 1 - accuracy
+            self.history.train.accuracy = self.history.train.accuracy.append(pd.DataFrame([np.concatenate([[self.i+self.epoch*self.numTrain],accuracy])]))
+            self.history.train.loss = self.history.train.loss.append(pd.DataFrame([np.concatenate([[self.i+self.epoch*self.numTrain],loss])]))
+            self.history.train.accuracy.to_csv(self.history.trainDir + "/Accuracy.csv")
+            self.history.train.loss.to_csv(self.history.trainDir + "/Loss.csv")
             if (verbose):
                 print("        {:<10}".format("Train"),end="")
                 for c in range(self.L):
