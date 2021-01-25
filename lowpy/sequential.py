@@ -134,8 +134,8 @@ class Sequential:
             self.inference(self.testLabels[i], self.testHits)
         accuracy = self.testHits.get()/numTests
         loss = 1-accuracy
-        self.history.test.accuracy = self.history.test.accuracy.append(pd.DataFrame([np.concatenate([[self.iteration+1],accuracy])]))
-        self.history.test.loss = self.history.test.loss.append(pd.DataFrame([np.concatenate([[self.iteration+1],loss])]))
+        self.history.test.accuracy = self.history.test.accuracy.append(pd.DataFrame([np.concatenate([[self.iteration],accuracy])]))
+        self.history.test.loss = self.history.test.loss.append(pd.DataFrame([np.concatenate([[self.iteration],loss])]))
         self.history.test.accuracy.to_csv(self.history.testDir + "/Accuracy.csv")
         self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
         if (self.verbose):
@@ -174,8 +174,8 @@ class Sequential:
                 self.inference(self.trainLabels[self.i],self.trainHits)
             accuracy = self.trainHits.get()/self.numTrain
             loss = 1 - accuracy
-            self.history.train.accuracy = self.history.train.accuracy.append(pd.DataFrame([np.concatenate([[self.iteration+1],accuracy])]))
-            self.history.train.loss = self.history.train.loss.append(pd.DataFrame([np.concatenate([[self.iteration+1],loss])]))
+            self.history.train.accuracy = self.history.train.accuracy.append(pd.DataFrame([np.concatenate([[self.iteration],accuracy])]))
+            self.history.train.loss = self.history.train.loss.append(pd.DataFrame([np.concatenate([[self.iteration],loss])]))
             self.history.train.accuracy.to_csv(self.history.trainDir + "/Accuracy.csv")
             self.history.train.loss.to_csv(self.history.trainDir + "/Loss.csv")
             if (verbose):
