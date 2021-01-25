@@ -3,6 +3,9 @@ import pycuda.autoinit
 from pycuda.compiler import SourceModule
 import pycuda.gpuarray as gpuarray
 import numpy as np
+import pandas as pd
+from datetime import datetime
+import os
 import time
 
 # Start timer from 0
@@ -17,7 +20,8 @@ def toc():
 
 class Sequential:
     # Constructor for model initialization
-    def __init__(self):
+    def __init__(self,number_of_networks=1):
+        self.L          = number_of_networks
         self.layer      = []
         self.numLayers  = 0
         self.verbose    = True
@@ -30,9 +34,9 @@ class Sequential:
         self.layer.append(newLayer)
         numLayers = len(self.layer)
         if (numLayers == 1):                                                # If this is the first layer added:
-            self.layer[0].build(self.layer[0].I,self.layer[0].J)        # Run the build function with the user-specified input shape
+            self.layer[0].build(self.L,self.layer[0].I,self.layer[0].J)         # Run the build function with the user-specified input shape
         else:                                                               # Otherwise, run the build function with the previous layer's output length as the current input shape
-            self.layer[numLayers-1].build(self.layer[numLayers-2].J,self.layer[numLayers-1].J)
+            self.layer[numLayers-1].build(self.L,self.layer[numLayers-2].J,self.layer[numLayers-1].J)
             self.layer[numLayers-1].linkPreviousLayer(self.layer[numLayers-2]) # Link the previous layer to the current one
             self.layer[numLayers-2].linkNextLayer(self.layer[numLayers-1])     # Link the current layer to the previous one
         self.numLayers += 1
@@ -58,15 +62,33 @@ class Sequential:
                     self.layer[l].backpropagate()
 
     # Decision
-    def inference(self,label,hits_d):
-        self.layer[self.numLayers-1].argmax(label,hits_d)
+    def inference(self,label,hits):
+        self.layer[self.numLayers-1].argmax(label,hits)
 
     # Model architecture
     def describe(self):
         print("---------------------------------------------------------------")
-        print ("{:<7} {:<11} {:<15} {:<15} {:<12}".format("Type", "Neurons", "Learning Rate", "Momentum Rate","Variability"))
-        for l in self.layer:
-            print ("{:<7} {:<11} {:<15} {:<15} {:<12}".format("Dense", str(l.I)+"->"+str(l.J), f'{l.alpha:.5f}', f'{l.beta:.5f}', f'{l.sigma_i:.5f}'))
+        print("")
+        neurons = str(self.layer[0].I)
+        for l in range(len(self.layer)):
+            neurons += "->" + str(self.layer[l].J)
+        print(neurons + " with " + str(self.L) + " variants:")
+        print("")
+        for l in range(len(self.layer)):
+            print("Layer " + str(l)+ " -------------------------------------------------------")
+            print("        {:<10}".format("alpha"),end="")
+            for c in range(self.L):
+                print("{:<10}".format(self.layer[l].alpha.get()[c]),end="")
+            print("")
+            print("        {:<10}".format("beta"),end="")
+            for c in range(self.L):
+                print("{:<10}".format(self.layer[l].beta.get()[c]),end="")
+            print("")
+            print("        {:<10}".format("sigma_i"),end="")
+            for c in range(self.L):
+                print("{:<10}".format(self.layer[l].sigma_i.get()[c]),end="")
+            print("")
+        print("")
         print("---------------------------------------------------------------")
 
     # Track model data
@@ -74,14 +96,16 @@ class Sequential:
         def __init__(self):
             self.train      = self.trialData()
             self.test       = self.trialData()
-            self.alpha      = []
-            self.beta       = []
-            self.sigma_i    = []
+            self.metricsDir    = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            self.trainDir = self.metricsDir + "/Train"
+            self.testDir = self.metricsDir + "/Test"
+            os.mkdir(self.metricsDir)
+            os.mkdir(self.trainDir)
+            os.mkdir(self.testDir)
         class trialData:
             def __init__(self):
-                self.iteration  = []
-                self.accuracy   = []
-                self.loss       = []
+                self.accuracy   = pd.DataFrame(columns=np.arange(11))
+                self.loss       = pd.DataFrame(columns=np.arange(11))
 
     # Import dataset
     def importDataset(self,trainData,trainLabels,testData,testLabels):
@@ -104,44 +128,41 @@ class Sequential:
     # Test model
     def validate(self):
         numTests = len(self.testData)
-        testHits = gpuarray.zeros(3,dtype=np.float64)
-        self.layer[self.numLayers-1].resetHits()
+        self.testHits = gpuarray.zeros(self.L,dtype=np.int32)
         for i in range(numTests):
             self.propagate(i)
-            self.inference(self.testLabels[i], testHits)
-        accuracy = testHits.get()[0]/numTests
+            self.inference(self.testLabels[i], self.testHits)
+        accuracy = self.testHits.get()/numTests
         loss = 1-accuracy
-        self.history.test.accuracy.append(accuracy)
-        self.history.test.loss.append(loss)
-        self.history.test.iteration.append(self.epoch*self.numTrain+self.i)
+        self.history.test.accuracy = self.history.test.accuracy.append(pd.DataFrame([np.concatenate([[self.i+self.epoch*self.numTrain],accuracy])]))
+        self.history.test.loss = self.history.test.loss.append(pd.DataFrame([np.concatenate([[self.i+self.epoch*self.numTrain],loss])]))
+        self.history.test.accuracy.to_csv(self.history.testDir + "/Accuracy.csv")
+        self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
         if (self.verbose):
-            print ("{:<20} {:<20} {:<20}".format("    Testing", f'{accuracy*100:.2f}' + "%", f'{loss:.5f}'))
-        if (accuracy <= self.peakAccuracy):
-            self.numConverged += 1
-        else:
-            self.numConverged = 0
-            self.peakAccuracy = accuracy
+            print("        {:<10}".format("Test"),end="")
+            for c in range(self.L):
+                print("{:<10}".format(f'{accuracy[c]*100:.2f}'+"%"),end="")
+            print("")
+        # if (accuracy <= self.peakAccuracy):
+        #     self.numConverged += 1
+        # else:
+        #     self.numConverged = 0
+        #     self.peakAccuracy = accuracy
 
     # Train model
     def fit(self, trainData, trainLabels, validation_data, epochs, batch_size=-1, tests_per_epoch=1, convergenceTracking=-1, verbose=True):
         self.verbose = verbose
-        self.history = self.metrics()
-        for l in self.layer:
-            self.history.alpha.append(l.alpha)
-            self.history.beta.append(l.beta)
-            self.history.sigma_i.append(l.sigma_i)
         self.importDataset(trainData,trainLabels,validation_data[0],validation_data[1])
         self.layer[0].x = self.trainData
         self.numTrain = len(trainData)
         self.numConverged = 0
         self.peakAccuracy = 0
         self.describe()
-        print ("{:<20} {:<20} {:<20}".format("Epoch", "Accuracy", "Loss"))
+        self.history = self.metrics()
         for self.epoch in range(epochs):
             if (self.verbose):
-                print("  " + str(self.epoch))
-            trainHits = gpuarray.zeros(3,dtype=np.float64)
-            self.layer[self.numLayers-1].resetHits()
+                print("Epoch " + str(self.epoch))
+            self.trainHits = gpuarray.zeros(self.L,dtype=np.int32)
             for self.i in range(self.numTrain):
                 if (self.i%(int(self.numTrain/tests_per_epoch))==0):
                     self.layer[0].x = self.testData
@@ -149,15 +170,17 @@ class Sequential:
                     self.layer[0].x = self.trainData
                 self.propagate(self.i)
                 self.backpropagate(self.i,self.trainLabels[self.i])
-                self.inference(self.trainLabels[self.i],trainHits)
-            accuracy = trainHits.get()[0]/self.numTrain
+                self.inference(self.trainLabels[self.i],self.trainHits)
+            accuracy = self.trainHits.get()/self.numTrain
             loss = 1 - accuracy
-            self.history.train.accuracy.append(accuracy)
-            self.history.train.loss.append(loss)
-            self.history.train.iteration.append(self.epoch*self.numTrain+self.i)
             if (verbose):
-                print ("{:<20} {:<20} {:<20}".format("    Training", f'{accuracy*100:.2f}'+"%", f'{loss:.5f}'))
+                print("        {:<10}".format("Train"),end="")
+                for c in range(self.L):
+                    print("{:<10}".format(f'{accuracy[c]*100:.2f}'+"%"),end="")
+                print("")
             if (self.numConverged >= 5 and convergenceTracking > -1):
                 break
+        self.layer[0].x = self.testData
+        self.validate()
         print("---------------------------------------------------------------")
-        return self.history
+        return self.metrics

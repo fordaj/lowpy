@@ -3,21 +3,23 @@
 __global__ void propagate(
     const   int                     I,
     const   int                     iteration,
-    const   double * __restrict__   x,
-    const   double * __restrict__   w,
-    const   double * __restrict__   b,
-            double * __restrict__   y,
-            double * __restrict__   z
+    const   double  * __restrict__  x,
+    const   double  * __restrict__  w,
+    const   double  * __restrict__  b,
+            double  * __restrict__  y,
+            double  * __restrict__  z
 ){
-    int j = blockIdx.x;
+    int l = blockIdx.x;
+    int j = blockIdx.y;
+    int J = gridDim.y;
     double sum = 0;
     int inputIdx = 0;
     if (iteration > -1){
         inputIdx = iteration * I;
     }
-    for (int i = 0; i < I; i++) sum += x[inputIdx+i]*w[j*I+i];
-    y[j] = sum + b[j];
-    z[j] = 1/(1 + exp(-y[j]));
+    for (int i = 0; i < I; i++) sum += x[inputIdx+i]*w[l*J*I+j*I+i];
+    y[l*J+j] = sum + b[l*J+j];
+    z[l*J+j] = 1/(1 + exp(-y[l*J+j]));
 }
 __global__ void backpropagate(
     const   int                     iteration,
@@ -29,61 +31,66 @@ __global__ void backpropagate(
     const   double * __restrict__   dedz_n,
     const   double * __restrict__   dzdy_n,
             double * __restrict__   dzdy,
-    const   double                  alpha,
+    const   double * __restrict__   alpha,
     const   int                     I,
             double * __restrict__   b,
             double * __restrict__   w,
     const   double * __restrict__   x,
-    const   double                  beta,
-            double * __restrict__   vtb,
-            double * __restrict__   vtw
+    const   double * __restrict__   beta,
+            double * __restrict__   mb,
+            double * __restrict__   mw
 ){
-    int j   = blockIdx.x;
-    int I_n = gridDim.x;
+    int l   = blockIdx.x;
+    int j   = blockIdx.y;
+    int J   = gridDim.y;
+    int I_n = gridDim.y;
     int inputIdx = 0;
     if (iteration > -1){
         inputIdx = iteration * I;
     }
     if (label > -1){
         if (j == label){
-            dedz[j] = z[j] - 1;
+            dedz[l*J+j] = z[l*J+j] - 1;
         }else{
-            dedz[j] = z[j] - 0;
+            dedz[l*J+j] = z[l*J+j] - 0;
         }
     }else{
         double sum = 0;
-        for (int j_n = 0; j_n < J_n; j_n++) sum += w_n[j+j_n*I_n] * dedz_n[j_n] * dzdy_n[j_n];
-        dedz[j] = sum;
+        for (int j_n = 0; j_n < J_n; j_n++) sum += w_n[l*J_n*I_n+j+j_n*I_n] * dedz_n[l*J_n+j_n] * dzdy_n[l*J_n+j_n];
+        dedz[l*J+j] = sum;
     }
-    dzdy[j] = z[j] * (1 - z[j]);
-    b[j]   -= (beta * vtb[j] + alpha * dedz[j] * dzdy[j]);
-    vtb[j]  = beta * vtb[j] + alpha * dedz[j] * dzdy[j];
+    dzdy[l*J+j] = z[l*J+j] * (1 - z[l*J+j]);
+    b[l*J+j]   -= (beta[l] * mb[l*J+j] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
+    mb[l*J+j]  = (beta[l] * mb[l*J+j] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
+    // mb[l*J+j]  = (beta[l] * mb[l*J+j] - alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
+    // b[l*J+j]   += mb[l*J+j];
 
     for (int i = 0; i < I; i++){
-        w[j*I+i]    -= (beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[inputIdx+i]);
-        vtw[j*I+i]  = beta * vtw[j*I+i] + alpha * dedz[j] * dzdy[j] * x[inputIdx+i];
+        w[l*J*I+j*I+i]     -= (beta[l] * mw[l*J*I+j*I+i] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
+        mw[l*J*I+j*I+i]     = (beta[l] * mw[l*J*I+j*I+i] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
+        // mw[l*J*I+j*I+i]   = (beta[l] * mw[l*J*I+j*I+i] - alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
+        // w[l*J*I+j*I+i]    += mw[l*J*I+j*I+i];
     }
 }
 __global__ void argmax(
         const   int                     label,
-        const   double * __restrict__   z,
-                double *__restrict__    hits
+        const   double  * __restrict__  z,
+                int     * __restrict__  hits
 ){
-    int j = blockIdx.x;
-    int J = gridDim.x;
+    int l = blockIdx.x;
+    int j = blockIdx.y;
+    int J = gridDim.y;
     if (j == 0){
         double maxVal = 0;
         int maxIdx = 0;
         for (int i = 0; i < J; i++){
-            if (z[i] > maxVal){
+            if (z[l*J+i] > maxVal){
                 maxIdx = i;
-                maxVal = z[i];
+                maxVal = z[l*J+i];
             }
         }
         if (maxIdx == label){
-            hits[0] += 1;
+            hits[l] += 1;
         }
-        hits[1] = maxIdx;
-        hits[2] = maxVal;
     }
 }
