@@ -78,13 +78,13 @@ history = model.fit(
 
 
 
-plt.figure(figsize=(6, 4.5))
-for h in h.test.accuracy:
-    plt.plot(history.test.iteration,h, label=f'{h.sigma_i[0]:.3f}')
-plt.xlabel("Iterations")
-plt.ylabel("Accuracy")
-plt.title("2LP with Varied sigma_i")
-plt.legend(loc='lower right')
-plt.grid()
-plt.show()
-plt.savefig('2LPhjsadkf.png',dpi=1200)
+# plt.figure(figsize=(6, 4.5))
+# for h in h.test.accuracy:
+#     plt.plot(history.test.iteration,h, label=f'{h.sigma_i[0]:.3f}')
+# plt.xlabel("Iterations")
+# plt.ylabel("Accuracy")
+# plt.title("2LP with Varied sigma_i")
+# plt.legend(loc='lower right')
+# plt.grid()
+# plt.show()
+# plt.savefig('2LPhjsadkf.png',dpi=1200)
