@@ -96,7 +96,7 @@ class Sequential:
         def __init__(self):
             self.train      = self.trialData()
             self.test       = self.trialData()
-            self.metricsDir    = str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            self.metricsDir    = "LowPy " + str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             self.trainDir = self.metricsDir + "/Train"
             self.testDir = self.metricsDir + "/Test"
             os.mkdir(self.metricsDir)
@@ -136,8 +136,8 @@ class Sequential:
         loss = 1-accuracy
         self.history.test.accuracy = self.history.test.accuracy.append(pd.DataFrame([np.concatenate([[self.iteration],accuracy])]))
         self.history.test.loss = self.history.test.loss.append(pd.DataFrame([np.concatenate([[self.iteration],loss])]))
-        self.history.test.accuracy.to_csv(self.history.testDir + "/Accuracy.csv")
-        self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
+        self.history.test.accuracy.to_csv(self.history.testDir + "/Accuracy.csv",index=False)
+        self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv",index=False)
         if (self.verbose):
             print("        {:<10}".format("Test"),end="")
             for c in range(self.L):
@@ -185,6 +185,7 @@ class Sequential:
                 print("")
             if (self.numConverged >= 5 and convergenceTracking > -1):
                 break
+        print("Final")
         self.layer[0].x = self.testData
         self.validate()
         print("---------------------------------------------------------------")

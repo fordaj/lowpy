@@ -141,5 +141,3 @@ class Dense:
             self.z.gpudata,
             hits.gpudata
         )
-        
-
