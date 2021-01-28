@@ -60,16 +60,18 @@ __global__ void backpropagate(
         dedz[l*J+j] = sum;
     }
     dzdy[l*J+j] = z[l*J+j] * (1 - z[l*J+j]);
-    b[l*J+j]   -= (beta[l] * mb[l*J+j] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
-    mb[l*J+j]  = (beta[l] * mb[l*J+j] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
-    // mb[l*J+j]  = (beta[l] * mb[l*J+j] - alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
-    // b[l*J+j]   += mb[l*J+j];
+    // b[l*J+j]   -= (beta[l] * mb[l*J+j] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
+    // mb[l*J+j]  = (beta[l] * mb[l*J+j] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j]);
+    mb[l*J+j]  = beta[l] * mb[l*J+j] - alpha[l] * dedz[l*J+j] * dzdy[l*J+j];
+    b[l*J+j]   += mb[l*J+j];
+    
 
     for (int i = 0; i < I; i++){
-        w[l*J*I+j*I+i]     -= (beta[l] * mw[l*J*I+j*I+i] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
-        mw[l*J*I+j*I+i]     = (beta[l] * mw[l*J*I+j*I+i] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
-        // mw[l*J*I+j*I+i]   = (beta[l] * mw[l*J*I+j*I+i] - alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
-        // w[l*J*I+j*I+i]    += mw[l*J*I+j*I+i];
+        //w[l*J*I+j*I+i]     -= (beta[l] * mw[l*J*I+j*I+i] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
+        //mw[l*J*I+j*I+i]     = (beta[l] * mw[l*J*I+j*I+i] + alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i]);
+        mw[l*J*I+j*I+i]   = beta[l] * mw[l*J*I+j*I+i] - alpha[l] * dedz[l*J+j] * dzdy[l*J+j] * x[inputIdx+i];
+        w[l*J*I+j*I+i]    += mw[l*J*I+j*I+i];
+        
     }
 }
 __global__ void argmax(

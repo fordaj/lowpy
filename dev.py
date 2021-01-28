@@ -26,16 +26,16 @@ trainData   = np.true_divide(trainData, max(np.max(trainData), np.max(testData))
 testData    = np.true_divide(testData,  max(np.max(trainData), np.max(testData)))
 history = []
 #----GLOBAL PARAMETERS---#
-number_of_networks      = 10
+number_of_networks      = 11
 input_shape             = 784
-alpha                   = [ 0.1,    0.1,    0.1,    0.1,    0.1,    0.1,    0.1,    0.1,    0.1,    0.1]
-beta                    = np.zeros(number_of_networks)
-sigma_i                 = [ 0.5,    0.1,    0.05,   0.01,   0.005,  0.001,  0.0005, 0.0001, 0.00005,0.00001]
+alpha                   = np.ones(number_of_networks) * 0.1
+beta                    = np.ones(number_of_networks) *0.9#[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+sigma_i                 = np.zeros(number_of_networks) #[ 0.5,    0.1,    0.05,   0.01,   0.005,  0.001,  0.0005, 0.0001, 0.00005,0.00001]
 weight_initialization   = "uniform"
 #--SIMULATION PARAMETERS-#
-epochs = 10
+epochs = 100
 batch_size = 60000
-tests_per_epoch = 5
+tests_per_epoch = 1
 validation_data = (testData,testLabels)
 verbose = True
 
