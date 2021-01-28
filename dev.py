@@ -30,7 +30,7 @@ number_of_networks      = 11
 input_shape             = 784
 alpha                   = np.ones(number_of_networks) * 0.1
 beta                    = np.ones(number_of_networks) *0.9#[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-sigma_i                 = np.zeros(number_of_networks) #[ 0.5,    0.1,    0.05,   0.01,   0.005,  0.001,  0.0005, 0.0001, 0.00005,0.00001]
+sigma                 = np.zeros(number_of_networks) #[ 0.5,    0.1,    0.05,   0.01,   0.005,  0.001,  0.0005, 0.0001, 0.00005,0.00001]
 weight_initialization   = "uniform"
 #--SIMULATION PARAMETERS-#
 epochs = 100
@@ -43,23 +43,23 @@ model = lp.Sequential(number_of_networks=number_of_networks)
 # Build Model
 model.add(  
     lp.Dense(   
-        10,    
+        533,    
         input_shape=input_shape,    
         alpha=alpha,    
         beta=beta,     
         weight_initialization=weight_initialization, 
-        sigma_i=sigma_i   
+        sigma=sigma   
     )
 )
-# model.add(  
-#     lp.Dense(   
-#         10,      
-#         alpha=alpha,    
-#         beta=beta,     
-#         weight_initialization=weight_initialization, 
-#         sigma_i=sigma_i   
-#     )
-# )
+model.add(  
+    lp.Dense(   
+        10,      
+        alpha=alpha,    
+        beta=beta,     
+        weight_initialization=weight_initialization, 
+        sigma=sigma   
+    )
+)
 # Simulate Model
 history = model.fit(
     trainData, 

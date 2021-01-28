@@ -28,14 +28,14 @@ class Dense:
             self.argmax         = None
 
     # Constructor for model initialization
-    def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, weight_initialization="normal", sigma_i=0):
+    def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, weight_initialization="normal", sigma=0):
         # Layer dimensions are invariable across networks
         self.I                      = input_shape
         self.J                      = output_shape
         self.alpha                  = gpuarray.to_gpu(np.array(alpha,dtype=np.float64))
         self.beta                   = gpuarray.to_gpu(np.array(beta,dtype=np.float64))
         self.weight_initialization  = weight_initialization
-        self.sigma_i                = gpuarray.to_gpu(np.array(sigma_i,dtype=np.float64))
+        self.sigma                = gpuarray.to_gpu(np.array(sigma,dtype=np.float64))
         self.gpu                    = self.functors()
 
     # Layer constructor
@@ -52,9 +52,9 @@ class Dense:
             self.w          = np.random.normal(0,math.sqrt(2/self.I),(self.V,self.J,self.I)).astype(np.float64)
             self.b          = np.random.normal(0,math.sqrt(2/self.I),(self.V,self.J)).astype(np.float64)
         for l in range(self.V):
-            if (self.sigma_i[l].get() > 0):
-                self.w[l]       = np.random.normal(self.w[l],self.sigma_i[l].get())
-                self.b[l]       = np.random.normal(self.b[l],self.sigma_i[l].get())
+            if (self.sigma[l].get() > 0):
+                self.w[l]       = np.random.normal(self.w[l],self.sigma[l].get())
+                self.b[l]       = np.random.normal(self.b[l],self.sigma[l].get())
         self.w          = gpuarray.to_gpu(self.w)
         self.b          = gpuarray.to_gpu(self.b)
         np.random.normal()
