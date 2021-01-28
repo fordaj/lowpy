@@ -28,6 +28,9 @@ class Sequential:
         self.epoch      = 0
         self.i          = 0
         self.numTrain   = 0
+        self.history    = None
+        self.cwd        = "LowPy " + str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        os.mkdir(self.cwd)
 
     # Function for appending layer objects to the model
     def add(self,newLayer):
@@ -84,24 +87,44 @@ class Sequential:
             for c in range(self.V):
                 print("{:<10}".format(self.layer[l].beta.get()[c]),end="")
             print("")
-            print("        {:<10}".format("sigma_i"),end="")
+            print("        {:<10}".format("sigma"),end="")
             for c in range(self.V):
-                print("{:<10}".format(self.layer[l].sigma_i.get()[c]),end="")
+                print("{:<10}".format(self.layer[l].sigma.get()[c]),end="")
             print("")
         print("")
         print("---------------------------------------------------------------")
+        self.architecture = {
+            "Layer":[],
+            "Inputs":[],
+            "Outputs":[],
+            "Weight Initialization":[],
+            "Alpha":[],
+            "Beta":[],
+            "Sigma":[]
+        }
+        for l in range(len(self.layer)):
+            self.architecture["Layer"].append(l)
+            self.architecture["Inputs"].append(self.layer[l].I)
+            self.architecture["Outputs"].append(self.layer[l].J)
+            self.architecture["Weight Initialization"].append(self.layer[l].weight_initialization)
+            self.architecture["Alpha"].append(self.layer[l].alpha)
+            self.architecture["Beta"].append(self.layer[l].beta)
+            self.architecture["Sigma"].append(self.layer[l].sigma)
+        self.architecture = pd.DataFrame(self.architecture)
+        self.architecture.to_csv(self.cwd + "/Architecture.csv",index=False)
+
 
     # Track model data
     class metrics:
-        def __init__(self):
-            self.train      = self.trialData()
-            self.test       = self.trialData()
-            self.metricsDir    = "LowPy " + str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            self.trainDir = self.metricsDir + "/Train"
-            self.testDir = self.metricsDir + "/Test"
-            os.mkdir(self.metricsDir)
+        def __init__(self, cwd):
+            self.train          = self.trialData()
+            self.test           = self.trialData()
+            self.metricsDir     = cwd
+            self.trainDir       = self.metricsDir + "/Train"
+            self.testDir        = self.metricsDir + "/Test"
             os.mkdir(self.trainDir)
             os.mkdir(self.testDir)
+            self.architecture   = pd.DataFrame()
         class trialData:
             def __init__(self):
                 self.accuracy   = pd.DataFrame()
@@ -158,7 +181,7 @@ class Sequential:
         self.numConverged = 0
         self.peakAccuracy = 0
         self.describe()
-        self.history = self.metrics()
+        self.history = self.metrics(self.cwd)
         for self.epoch in range(epochs):
             if (self.verbose):
                 print("Epoch " + str(self.epoch))
