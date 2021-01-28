@@ -21,7 +21,7 @@ def toc():
 class Sequential:
     # Constructor for model initialization
     def __init__(self,number_of_networks=1):
-        self.L          = number_of_networks
+        self.V          = number_of_networks
         self.layer      = []
         self.numLayers  = 0
         self.verbose    = True
@@ -34,9 +34,9 @@ class Sequential:
         self.layer.append(newLayer)
         numLayers = len(self.layer)
         if (numLayers == 1):                                                # If this is the first layer added:
-            self.layer[0].build(self.L,self.layer[0].I,self.layer[0].J)         # Run the build function with the user-specified input shape
+            self.layer[0].build(self.V,self.layer[0].I,self.layer[0].J)         # Run the build function with the user-specified input shape
         else:                                                               # Otherwise, run the build function with the previous layer's output length as the current input shape
-            self.layer[numLayers-1].build(self.L,self.layer[numLayers-2].J,self.layer[numLayers-1].J)
+            self.layer[numLayers-1].build(self.V,self.layer[numLayers-2].J,self.layer[numLayers-1].J)
             self.layer[numLayers-1].linkPreviousLayer(self.layer[numLayers-2]) # Link the previous layer to the current one
             self.layer[numLayers-2].linkNextLayer(self.layer[numLayers-1])     # Link the current layer to the previous one
         self.numLayers += 1
@@ -72,20 +72,20 @@ class Sequential:
         neurons = str(self.layer[0].I)
         for l in range(len(self.layer)):
             neurons += "->" + str(self.layer[l].J)
-        print(neurons + " with " + str(self.L) + " variants:")
+        print(neurons + " with " + str(self.V) + " variants:")
         print("")
         for l in range(len(self.layer)):
             print("Layer " + str(l)+ " -------------------------------------------------------")
             print("        {:<10}".format("alpha"),end="")
-            for c in range(self.L):
+            for c in range(self.V):
                 print("{:<10}".format(self.layer[l].alpha.get()[c]),end="")
             print("")
             print("        {:<10}".format("beta"),end="")
-            for c in range(self.L):
+            for c in range(self.V):
                 print("{:<10}".format(self.layer[l].beta.get()[c]),end="")
             print("")
             print("        {:<10}".format("sigma_i"),end="")
-            for c in range(self.L):
+            for c in range(self.V):
                 print("{:<10}".format(self.layer[l].sigma_i.get()[c]),end="")
             print("")
         print("")
@@ -128,7 +128,7 @@ class Sequential:
     # Test model
     def validate(self):
         numTests = len(self.testData)
-        self.testHits = gpuarray.zeros(self.L,dtype=np.int32)
+        self.testHits = gpuarray.zeros(self.V,dtype=np.int32)
         for i in range(numTests):
             self.propagate(i)
             self.inference(self.testLabels[i], self.testHits)
@@ -140,7 +140,7 @@ class Sequential:
         self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv",index=False)
         if (self.verbose):
             print("        {:<10}".format("Test"),end="")
-            for c in range(self.L):
+            for c in range(self.V):
                 print("{:<10}".format(f'{accuracy[c]*100:.2f}'+"%"),end="")
             print("")
         # if (accuracy <= self.peakAccuracy):
@@ -162,7 +162,7 @@ class Sequential:
         for self.epoch in range(epochs):
             if (self.verbose):
                 print("Epoch " + str(self.epoch))
-            self.trainHits = gpuarray.zeros(self.L,dtype=np.int32)
+            self.trainHits = gpuarray.zeros(self.V,dtype=np.int32)
             for self.i in range(self.numTrain):
                 self.iteration = self.i+self.epoch*self.numTrain
                 if (self.i%(int(self.numTrain/tests_per_epoch))==0):
@@ -180,7 +180,7 @@ class Sequential:
             self.history.train.loss.to_csv(self.history.trainDir + "/Loss.csv")
             if (verbose):
                 print("        {:<10}".format("Train"),end="")
-                for c in range(self.L):
+                for c in range(self.V):
                     print("{:<10}".format(f'{accuracy[c]*100:.2f}'+"%"),end="")
                 print("")
             if (self.numConverged >= 5 and convergenceTracking > -1):

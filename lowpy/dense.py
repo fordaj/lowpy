@@ -41,17 +41,17 @@ class Dense:
     # Layer constructor
     def build(self,number_of_networks,input_shape,output_shape):
         # Layer dimensions
-        (self.L,self.I,self.J)  = (number_of_networks, input_shape, output_shape)
+        (self.V,self.I,self.J)  = (number_of_networks, input_shape, output_shape)
         # Input
-        self.x          = gpuarray.zeros((self.L,self.I),dtype=np.float64)
+        self.x          = gpuarray.zeros((self.V,self.I),dtype=np.float64)
         # Weights
         if (self.weight_initialization=="uniform"):
-            self.w          = np.random.rand(self.L,self.J,self.I).astype(np.float64) * 2 - 1
-            self.b          = np.random.rand(self.L,self.J).astype(np.float64) * 2 - 1
+            self.w          = np.random.rand(self.V,self.J,self.I).astype(np.float64) * 2 - 1
+            self.b          = np.random.rand(self.V,self.J).astype(np.float64) * 2 - 1
         else:
-            self.w          = np.random.normal(0,math.sqrt(2/self.I),(self.L,self.J,self.I)).astype(np.float64)
-            self.b          = np.random.normal(0,math.sqrt(2/self.I),(self.L,self.J)).astype(np.float64)
-        for l in range(self.L):
+            self.w          = np.random.normal(0,math.sqrt(2/self.I),(self.V,self.J,self.I)).astype(np.float64)
+            self.b          = np.random.normal(0,math.sqrt(2/self.I),(self.V,self.J)).astype(np.float64)
+        for l in range(self.V):
             if (self.sigma_i[l].get() > 0):
                 self.w[l]       = np.random.normal(self.w[l],self.sigma_i[l].get())
                 self.b[l]       = np.random.normal(self.b[l],self.sigma_i[l].get())
@@ -59,14 +59,14 @@ class Dense:
         self.b          = gpuarray.to_gpu(self.b)
         np.random.normal()
         # Momentum
-        self.mw        = gpuarray.zeros((self.L,self.J,self.I),dtype=np.float64)
-        self.mb        = gpuarray.zeros((self.L,self.J),dtype=np.float64)
+        self.mw        = gpuarray.zeros((self.V,self.J,self.I),dtype=np.float64)
+        self.mb        = gpuarray.zeros((self.V,self.J),dtype=np.float64)
         # Outputs
-        self.y          = gpuarray.zeros((self.L,self.J),dtype=np.float64)
-        self.z          = gpuarray.zeros((self.L,self.J),dtype=np.float64)
+        self.y          = gpuarray.zeros((self.V,self.J),dtype=np.float64)
+        self.z          = gpuarray.zeros((self.V,self.J),dtype=np.float64)
         # Gradients
-        self.dedz       = gpuarray.zeros((self.L,self.J),dtype=np.float64)
-        self.dzdy       = gpuarray.zeros((self.L,self.J),dtype=np.float64)
+        self.dedz       = gpuarray.zeros((self.V,self.J),dtype=np.float64)
+        self.dzdy       = gpuarray.zeros((self.V,self.J),dtype=np.float64)
         # Next layer attributes
         self.n_J        = self.J
         self.n_w        = self.w
@@ -97,7 +97,7 @@ class Dense:
     # Propagate 
     def propagate(self,iteration=-1):
         self.gpu.propagate.prepared_call(
-            (self.L,self.J,1),
+            (self.V,self.J,1),
             (1,1,1),
             np.int32(self.I), 
             np.int32(iteration),
@@ -111,7 +111,7 @@ class Dense:
     # Backpropagate
     def backpropagate(self,iteration=-1,label=-1):
         self.gpu.backpropagate.prepared_call(
-            (self.L,self.J,1),
+            (self.V,self.J,1),
             (1,1,1), 
             np.int32(iteration),
             np.int32(label),
@@ -135,7 +135,7 @@ class Dense:
     # Find winning neuron
     def argmax(self, label, hits):
         self.gpu.argmax.prepared_call(
-            (self.L,self.J,1),
+            (self.V,self.J,1),
             (1,1,1),
             np.int32(label),
             self.z.gpudata,
