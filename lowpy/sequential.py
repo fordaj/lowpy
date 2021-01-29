@@ -29,8 +29,6 @@ class Sequential:
         self.i          = 0
         self.numTrain   = 0
         self.history    = None
-        self.cwd        = "LowPy " + str(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        os.mkdir(self.cwd)
 
     # Function for appending layer objects to the model
     def add(self,newLayer):
@@ -111,17 +109,16 @@ class Sequential:
             self.architecture["Beta"].append(self.layer[l].beta)
             self.architecture["Sigma"].append(self.layer[l].sigma)
         self.architecture = pd.DataFrame(self.architecture)
-        self.architecture.to_csv(self.cwd + "/Architecture.csv",index=False)
+        self.architecture.to_csv("Architecture.csv",index=False)
 
 
     # Track model data
     class metrics:
-        def __init__(self, cwd):
+        def __init__(self):
             self.train          = self.trialData()
             self.test           = self.trialData()
-            self.metricsDir     = cwd
-            self.trainDir       = self.metricsDir + "/Train"
-            self.testDir        = self.metricsDir + "/Test"
+            self.trainDir       = "Train"
+            self.testDir        = "Test"
             os.mkdir(self.trainDir)
             os.mkdir(self.testDir)
             self.architecture   = pd.DataFrame()
@@ -181,7 +178,7 @@ class Sequential:
         self.numConverged = 0
         self.peakAccuracy = 0
         self.describe()
-        self.history = self.metrics(self.cwd)
+        self.history = self.metrics()
         for self.epoch in range(epochs):
             if (self.verbose):
                 print("Epoch " + str(self.epoch))
