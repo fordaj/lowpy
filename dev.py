@@ -30,8 +30,9 @@ number_of_networks      = 11
 input_shape             = len(trainData[0])
 alpha                   = np.ones(number_of_networks) * 0.1
 beta                    = np.linspace(0,1,number_of_networks)
-sigma                   = np.zeros(number_of_networks) #[ 0.5,    0.1,    0.05,   0.01,   0.005,  0.001,  0.0005, 0.0001, 0.00005,0.00001]
-weight_initialization   = "uniform"
+sigma                   = np.logspace(-1*(number_of_networks-1),0,number_of_networks-1)
+sigma[0]                = 0
+initialization_type   = "uniform"
 #--SIMULATION PARAMETERS-#
 epochs = 15
 batch_size = 60000
@@ -46,7 +47,7 @@ model.add(
         input_shape=input_shape,    
         alpha=alpha,    
         beta=beta,     
-        weight_initialization=weight_initialization, 
+        initialization_type=initialization_type, 
         sigma=sigma   
     )
 )
@@ -55,7 +56,7 @@ model.add(
 #         10,      
 #         alpha=alpha,    
 #         beta=beta,     
-#         weight_initialization=weight_initialization, 
+#         initialization_type=initialization_type, 
 #         sigma=sigma   
 #     )
 # )

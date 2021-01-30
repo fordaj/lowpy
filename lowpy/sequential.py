@@ -104,7 +104,7 @@ class Sequential:
             self.architecture["Layer"].append(l)
             self.architecture["Inputs"].append(self.layer[l].I)
             self.architecture["Outputs"].append(self.layer[l].J)
-            self.architecture["Weight Initialization"].append(self.layer[l].weight_initialization)
+            self.architecture["Weight Initialization"].append(self.layer[l].initialization_type)
             self.architecture["Alpha"].append(self.layer[l].alpha)
             self.architecture["Beta"].append(self.layer[l].beta)
             self.architecture["Sigma"].append(self.layer[l].sigma)
