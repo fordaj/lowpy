@@ -27,21 +27,19 @@ testData    = np.true_divide(testData,  max(np.max(trainData), np.max(testData))
 history = []
 #----GLOBAL PARAMETERS---#
 number_of_networks      = 11
-input_shape             = 784
+input_shape             = len(trainData[0])
 alpha                   = np.ones(number_of_networks) * 0.1
 beta                    = np.linspace(0,1,number_of_networks)
 sigma                   = np.zeros(number_of_networks) #[ 0.5,    0.1,    0.05,   0.01,   0.005,  0.001,  0.0005, 0.0001, 0.00005,0.00001]
 weight_initialization   = "uniform"
-
 #--SIMULATION PARAMETERS-#
 epochs = 15
 batch_size = 60000
 tests_per_epoch = 4
 validation_data = (testData,testLabels)
 verbose = True
-
+#------BUILD MODEL------#
 model = lp.Sequential(number_of_networks=number_of_networks)
-# Build Model
 model.add(  
     lp.Dense(   
         10,    
@@ -62,6 +60,7 @@ model.add(
 #     )
 # )
 # Simulate Model
+#--------SIMULATE--------#
 history = model.fit(
     trainData, 
     trainLabels, 
