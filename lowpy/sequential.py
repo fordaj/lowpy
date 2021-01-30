@@ -89,6 +89,10 @@ class Sequential:
             for c in range(self.V):
                 print("{:<10}".format(self.layer[l].sigma.get()[c]),end="")
             print("")
+            print("        {:<10}".format("init_param"),end="")
+            for c in range(self.V):
+                print("{:<10}".format(self.layer[l].initialization_parameter[c]),end="")
+            print("")
         print("")
         print("---------------------------------------------------------------")
         self.architecture = {
@@ -98,16 +102,18 @@ class Sequential:
             "Weight Initialization":[],
             "Alpha":[],
             "Beta":[],
-            "Sigma":[]
+            "Sigma":[],
+            "Initialization Parameter":[]
         }
         for l in range(len(self.layer)):
             self.architecture["Layer"].append(l)
             self.architecture["Inputs"].append(self.layer[l].I)
             self.architecture["Outputs"].append(self.layer[l].J)
-            self.architecture["Weight Initialization"].append(self.layer[l].weight_initialization)
+            self.architecture["Weight Initialization"].append(self.layer[l].initialization_type)
             self.architecture["Alpha"].append(self.layer[l].alpha)
             self.architecture["Beta"].append(self.layer[l].beta)
             self.architecture["Sigma"].append(self.layer[l].sigma)
+            self.architecture["Initialization Parameter"].append(self.layer[l].initialization_parameter)
         self.architecture = pd.DataFrame(self.architecture)
         self.architecture.to_csv("Architecture.csv",index=False)
 
