@@ -28,15 +28,17 @@ class Dense:
             self.argmax         = None
 
     # Constructor for model initialization
-    def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, initialization_type="normal", sigma=0):
+    def __init__(self, output_shape, input_shape=784, alpha=0.01, beta=0, initialization_type="uniform", initialization_parameter=2, sigma=0):
         # Layer dimensions are invariable across networks
-        self.I                      = input_shape
-        self.J                      = output_shape
-        self.alpha                  = gpuarray.to_gpu(np.array(alpha,dtype=np.float64))
-        self.beta                   = gpuarray.to_gpu(np.array(beta,dtype=np.float64))
-        self.initialization_type  = initialization_type
-        self.sigma                = gpuarray.to_gpu(np.array(sigma,dtype=np.float64))
-        self.gpu                    = self.functors()
+        self.I                          = input_shape
+        self.J                          = output_shape
+        # Varied hyperparameters on a per-layer basis
+        self.alpha                      = gpuarray.to_gpu(np.array(alpha,dtype=np.float64))
+        self.beta                       = gpuarray.to_gpu(np.array(beta,dtype=np.float64))
+        self.sigma                      = gpuarray.to_gpu(np.array(sigma,dtype=np.float64))
+        self.initialization_type        = initialization_type
+        self.initialization_parameter   = initialization_parameter
+        self.gpu                        = self.functors()
 
     # Layer constructor
     def build(self,number_of_networks,input_shape,output_shape):
@@ -44,14 +46,17 @@ class Dense:
         (self.V,self.I,self.J)  = (number_of_networks, input_shape, output_shape)
         # Input
         self.x          = gpuarray.zeros((self.V,self.I),dtype=np.float64)
-        # Weights
-        if (self.initialization_type=="uniform"):
-            self.w          = np.random.rand(self.V,self.J,self.I).astype(np.float64) * 2 - 1
-            self.b          = np.random.rand(self.V,self.J).astype(np.float64) * 2 - 1
-        else:
-            self.w          = np.random.normal(0,math.sqrt(2/self.I),(self.V,self.J,self.I)).astype(np.float64)
-            self.b          = np.random.normal(0,math.sqrt(2/self.I),(self.V,self.J)).astype(np.float64)
+        # Weight Initializations
+        self.w          = np.random.rand(self.V,self.J,self.I).astype(np.float64)
+        self.b          = np.random.rand(self.V,self.J).astype(np.float64)
         for l in range(self.V):
+            if (self.initialization_type == "uniform"):
+                self.w[l]       = self.w[l] * self.initialization_parameter[l] - self.initialization_parameter[l]/2
+                self.b[l]       = self.b[l] * self.initialization_parameter[l] - self.initialization_parameter[l]/2
+            elif (self.initialization_type == "normal"):
+                self.w          = np.random.normal(0,self.initialization_parameter[l],(self.J,self.I)).astype(np.float64)
+                self.b          = np.random.normal(0,self.initialization_parameter[l],(self.J)).astype(np.float64)
+            # Write variability
             if (self.sigma[l].get() > 0):
                 self.w[l]       = np.random.normal(self.w[l],self.sigma[l].get())
                 self.b[l]       = np.random.normal(self.b[l],self.sigma[l].get())

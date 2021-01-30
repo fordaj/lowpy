@@ -26,13 +26,14 @@ trainData   = np.true_divide(trainData, max(np.max(trainData), np.max(testData))
 testData    = np.true_divide(testData,  max(np.max(trainData), np.max(testData)))
 history = []
 #----GLOBAL PARAMETERS---#
-number_of_networks      = 11
-input_shape             = len(trainData[0])
-alpha                   = np.ones(number_of_networks) * 0.1
-beta                    = np.linspace(0,1,number_of_networks)
-sigma                   = np.logspace(-1*(number_of_networks-1),0,number_of_networks-1)
-sigma[0]                = 0
-initialization_type   = "uniform"
+number_of_networks          = 11
+input_shape                 = len(trainData[0])
+alpha                       = np.ones(number_of_networks) * 0.2
+beta                        = np.zeros(number_of_networks) #np.linspace(0,1,number_of_networks)
+sigma                       = np.zeros(number_of_networks) #np.logspace(-1*(number_of_networks-1),0,number_of_networks)
+sigma[0]                    = 0
+initialization_type         = "uniform"
+initialization_parameter    = np.linspace(0.1,2,number_of_networks) # math.sqrt(2/input_shape)
 #--SIMULATION PARAMETERS-#
 epochs = 15
 batch_size = 60000
@@ -43,23 +44,25 @@ verbose = True
 model = lp.Sequential(number_of_networks=number_of_networks)
 model.add(  
     lp.Dense(   
-        10,    
+        533,    
         input_shape=input_shape,    
         alpha=alpha,    
         beta=beta,     
         initialization_type=initialization_type, 
+        initialization_parameter=initialization_parameter,
         sigma=sigma   
     )
 )
-# model.add(  
-#     lp.Dense(   
-#         10,      
-#         alpha=alpha,    
-#         beta=beta,     
-#         initialization_type=initialization_type, 
-#         sigma=sigma   
-#     )
-# )
+model.add(  
+    lp.Dense(   
+        10,      
+        alpha=alpha,    
+        beta=beta,     
+        initialization_type=initialization_type, 
+        initialization_parameter=initialization_parameter,
+        sigma=sigma   
+    )
+)
 # Simulate Model
 #--------SIMULATE--------#
 history = model.fit(
