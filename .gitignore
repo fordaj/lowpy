@@ -5,3 +5,6 @@ lowpy/__pycache__/
 build/
 dist/
 .vscode/
+Train/
+Test/
+Architecture.csv
