@@ -125,8 +125,10 @@ class Sequential:
             self.test           = self.trialData()
             self.trainDir       = "Train"
             self.testDir        = "Test"
-            os.mkdir(self.trainDir)
-            os.mkdir(self.testDir)
+            if not os.path.exists(self.trainDir):
+                os.mkdir(self.trainDir)
+            if not os.path.exists(self.testDir):
+                os.mkdir(self.testDir)
             self.architecture   = pd.DataFrame()
         class trialData:
             def __init__(self):
