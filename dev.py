@@ -32,7 +32,7 @@ alpha                       = np.ones(number_of_networks) * 0.2
 beta                        = np.zeros(number_of_networks) #np.linspace(0,1,number_of_networks)
 sigma                       = np.zeros(number_of_networks) #np.logspace(-1*(number_of_networks-1),0,number_of_networks)
 sigma[0]                    = 0
-initialization_type         = "uniform"
+initialization_type         = "normal"
 initialization_parameter    = np.linspace(0.1,2,number_of_networks) # math.sqrt(2/input_shape)
 #--SIMULATION PARAMETERS-#
 epochs = 15

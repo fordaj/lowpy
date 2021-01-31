@@ -54,8 +54,8 @@ class Dense:
                 self.w[l]       = self.w[l] * self.initialization_parameter[l] - self.initialization_parameter[l]/2
                 self.b[l]       = self.b[l] * self.initialization_parameter[l] - self.initialization_parameter[l]/2
             elif (self.initialization_type == "normal"):
-                self.w          = np.random.normal(0,self.initialization_parameter[l],(self.J,self.I)).astype(np.float64)
-                self.b          = np.random.normal(0,self.initialization_parameter[l],(self.J)).astype(np.float64)
+                self.w[l]       = np.random.normal(0,self.initialization_parameter[l],(self.J,self.I)).astype(np.float64)
+                self.b[l]       = np.random.normal(0,self.initialization_parameter[l],(self.J)).astype(np.float64)
             # Write variability
             if (self.sigma[l].get() > 0):
                 self.w[l]       = np.random.normal(self.w[l],self.sigma[l].get())
