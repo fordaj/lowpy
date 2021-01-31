@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="lowpy",
-    version="0.1.4",
+    version="0.1.5",
     author="Andrew Ford",
     author_email="author@example.com",
     description="High level GPU simulations of low level device characteristics in ML algorithms",
