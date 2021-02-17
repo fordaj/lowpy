@@ -28,4 +28,3 @@ The following are required to use LowPy:
 - OS: Linux (should work on Windows, not tested)
 - Python 3.0 or newer
 - PyCUDA
-
