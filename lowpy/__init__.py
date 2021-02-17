@@ -1,2 +1,2 @@
-from .sequential import Sequential
-from .dense import Dense
+from .metrics import metrics
+from .wrapper import wrapper
