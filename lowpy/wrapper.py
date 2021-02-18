@@ -36,14 +36,14 @@ class wrapper:
         weights = []
         for l in self.model.layers:
             for w in range(len(l.weights)):
-                if not 'conv' in l.weights[w].name:
+                if (not 'conv' in l.weights[w].name) and (not 'embed' in l.weights[w].name):
                     weights.append(tf.random.normal(l.weights[w].shape,mean=l.weights[w],stddev=self.sigma))
 
     @tf.function
     def write_variability(self):
         weights = self.model.trainable_weights
         for w in range(len(weights)):
-            if not 'conv' in weights[w].name:
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
                 weights[w].assign(tf.random.normal(weights[w].shape,mean=weights[w],stddev=self.sigma))
         self.optimizer.apply_gradients(zip(self.zeros,weights))
 
@@ -51,7 +51,7 @@ class wrapper:
     def apply_decay(self):
         weights = self.model.trainable_weights
         for w in range(len(weights)):
-            if not 'conv' in weights[w].name:
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
                 weights[w].assign(tf.multiply(weights[w],self.decay))
         self.optimizer.apply_gradients(zip(self.zeros,weights))
 
@@ -59,7 +59,7 @@ class wrapper:
     def truncate_center_state(self):
         weights = self.model.trainable_weights
         for w in range(len(weights)):
-            if not 'conv' in weights[w].name:
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
                 one = tf.add(weights[w],abs(self.lower_bound))
                 two = tf.multiply(one,self.precision/self.range)
                 three = tf.clip_by_value(two,clip_value_min=0,clip_value_max=self.precision)
