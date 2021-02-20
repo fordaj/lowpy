@@ -3,15 +3,17 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import os
 import pandas as pd
+import numpy as np
 
 class wrapper:
-    def __init__(self,metrics,sigma=0.0, decay=1.0, precision=0, upper_bound=0.1, lower_bound=-0.1):
+    def __init__(self,metrics,sigma=0.0, decay=1.0, precision=0, upper_bound=0.1, lower_bound=-0.1, noise=0):
         self.history = metrics
         self.sigma = sigma
         self.decay = decay
         self.precision = precision
         self.upper_bound = upper_bound
         self.lower_bound = lower_bound
+        self.noise = noise
         self.range = abs(self.upper_bound) + abs(self.lower_bound)
         self.tff_write_variability = tf.function(self.write_variability)
         self.tff_apply_decay = tf.function(self.apply_decay)
@@ -69,7 +71,55 @@ class wrapper:
                 weights[w].assign(six)
         self.optimizer.apply_gradients(zip(self.zeros,weights))
 
-    ##@tf.function
+    def initialize_stuck_at_fault_matrices(self):
+        self.stuck_at_lower_bound_matrix = []
+        self.stuck_at_zero_matrix = []
+        self.stuck_at_upper_bound_matrix = []
+        for l in self.model.layers:
+            for w in range(len(l.weights)):
+                weight_dims = l.weights[w].shape
+                if (not 'conv' in l.weights[w].name) and (not 'embed' in l.weights[w].name):
+                    num_weights = tf.reduce_prod(weight_dims).numpy()
+                    num_lower = round(0.1*num_weights)
+                    num_zero = round(0.1*num_weights)
+                    num_upper = round(0.1*num_weights)
+                    stuck = np.zeros(num_weights)
+                    lower = np.zeros(num_weights)
+                    zero = np.zeros(num_weights)
+                    upper = np.zeros(num_weights)
+                    stuck[0:num_lower] = 1
+                    stuck[num_lower:(num_lower+num_zero)] = 2
+                    stuck[(num_lower+num_zero):(num_lower+num_zero+num_upper)] = 3
+                    np.random.shuffle(stuck)
+                    for s in range(len(stuck)):
+                        if (stuck[s] == 1):
+                            lower[s] = 1
+                        elif (stuck[s] == 2):
+                            zero[s] = 1
+                        elif (stuck[s] == 3):
+                            upper[s] = 1
+                    lower = tf.reshape(lower,weight_dims)
+                    zero = tf.reshape(zero,weight_dims)
+                    upper = tf.reshape(upper,weight_dims)
+                else:
+                    lower = tf.zeros(weight_dims,dtype=l.weights[w].dtype)
+                    zero = tf.zeros(weight_dims,dtype=l.weights[w].dtype)
+                    upper = tf.zeros(weight_dims,dtype=l.weights[w].dtype)
+                self.stuck_at_lower_bound_matrix.append(lower)
+                self.stuck_at_zero_matrix.append(zero)
+                self.stuck_at_upper_bound_matrix.append(upper)
+    
+    def apply_stuck_at_faults(self):
+        weights = self.model.trainable_weights
+        for w in range(len(weights)):
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
+                not_stuck_at_lower_bound = tf.math.round((self.stuck_at_lower_bound_matrix[4] - 1) * -1)
+                not_stuck_at_zero        = tf.math.round((self.stuck_at_zero_matrix[4] - 1) * -1)
+                not_stuck_at_upper_bound = tf.math.round((self.stuck_at_upper_bound_matrix[4] - 1) * -1)
+                bounds = (self.lower_bound*self.stuck_at_lower_bound_matrix[w]) + (self.upper_bound*self.stuck_at_upper_bound_matrix[w])
+                weights[w].assign(bounds + weights[w] * not_stuck_at_lower_bound * not_stuck_at_zero * not_stuck_at_upper_bound)
+        self.optimizer.apply_gradients(zip(self.zeros,weights))
+
     def training_step(self, x_batch_train, y_batch_train):
         with tf.GradientTape() as tape:
             logits = self.model(x_batch_train, training=True)
@@ -93,6 +143,7 @@ class wrapper:
         self.y_test = y_test
         self.weight_zeros()
         self.initialization_variability()
+        self.initialize_stuck_at_fault_matrices()
         test_loss = []
         test_accuracy = []
         test_metrics = self.evaluate()
@@ -102,6 +153,7 @@ class wrapper:
         print("Baseline\tLoss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%")
         for epoch in range(epochs):
             for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
+                self.apply_stuck_at_faults()
                 self.grads = self.training_step(tf.constant(x_batch_train), tf.constant(y_batch_train))
                 self.apply_grads()
                 if self.precision > 0:
