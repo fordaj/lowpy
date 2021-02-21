@@ -153,7 +153,7 @@ class wrapper:
         print("Baseline\tLoss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%")
         for epoch in range(epochs):
             for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-                self.apply_stuck_at_faults()
+                #self.apply_stuck_at_faults()
                 self.grads = self.training_step(tf.constant(x_batch_train), tf.constant(y_batch_train))
                 self.apply_grads()
                 if self.precision > 0:
