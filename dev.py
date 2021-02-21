@@ -6,15 +6,6 @@ import lowpy as lp
 
 
 
-# Prepare the training dataset.
-batch_size = 32
-(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
-#####################
-# WHY ISNT THIS NORMALIZED?!?!?!
-#####################
-
-x_train = np.reshape(x_train, (-1, 784))
-x_test = np.reshape(x_test, (-1, 784))
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
   try:
@@ -28,21 +19,21 @@ if gpus:
     print(e)
 
 
-# Reserve 10,000 samples for validation.
-x_val = x_train[-10000:]
-y_val = y_train[-10000:]
-x_train = x_train[:-10000]
-y_train = y_train[:-10000]
-x_test = tf.constant(x_test)
-y_test = tf.constant(y_test)
-
 # Prepare the training dataset.
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+batch_size    = 32
+x_train       = np.reshape(x_train, (-1, 784)) / 255
+x_test        = np.reshape(x_test, (-1, 784)) / 255
+x_val         = x_train[-10000:]
+y_val         = y_train[-10000:]
+x_train       = x_train[:-10000]
+y_train       = y_train[:-10000]
+x_test        = tf.constant(x_test)
+y_test        = tf.constant(y_test)
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
-
-# Prepare the validation dataset.
-val_dataset = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-val_dataset = val_dataset.batch(batch_size)
+val_dataset   = tf.data.Dataset.from_tensor_slices((x_val, y_val))
+val_dataset   = val_dataset.batch(batch_size)
 
 y_test = np.int64(y_test)
 
@@ -52,7 +43,6 @@ y_test = np.int64(y_test)
 
 
 epochs = 1
-history = lp.metrics()
 variants = 11
 sigma = np.zeros(variants)
 # sigma = np.logspace(-1*variants+2,0,variants-1)
@@ -64,6 +54,8 @@ precision = np.zeros(variants)
 lower_saf = np.linspace(0,0.1,variants)
 zero_saf = np.linspace(0,0.1,variants)
 upper_saf = np.linspace(0,0.1,variants)
+
+history = lp.metrics()
 
 for v in range(variants):
     tf.keras.backend.clear_session()
