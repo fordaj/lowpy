@@ -53,18 +53,30 @@ y_test = np.int64(y_test)
 
 epochs = 10
 history = lp.metrics()
-variants = 10
+variants = 11
 sigma = np.zeros(variants)
 # sigma = np.logspace(-1*variants+2,0,variants-1)
 # sigma = np.insert(sigma,0,0,axis=0)
 # decay = np.linspace(1.0,0.94,variants)
 decay = np.ones(variants)
-precision = np.power(2,np.arange(variants)+1)[::-1]
-# precision = np.zeros(variants)
+# precision = np.power(2,np.arange(variants)+1)[::-1]
+precision = np.zeros(variants)
+lower_saf = np.linspace(0,0.1,variants)
+zero_saf = np.linspace(0,0.1,variants)
+upper_saf = np.linspace(0,0.1,variants)
 
 for v in range(variants):
     tf.keras.backend.clear_session()
-    simulator = lp.wrapper(history,sigma=sigma[v], decay=decay[v],precision=precision[v],upper_bound=0.1,lower_bound=-0.1 )
+    simulator = lp.wrapper(history,
+      sigma=sigma[v], 
+      decay=decay[v],
+      precision=precision[v],
+      upper_bound=0.1,
+      lower_bound=-0.1,
+      percent_stuck_at_lower_bound=lower_saf[v],
+      percent_stuck_at_zero=zero_saf[v],
+      percent_stuck_at_upper_bound=upper_saf[v]
+    )
 
     # inputs = keras.Input(shape=(784,), name="digits")
     # x1 = layers.Dense(533, activation="relu")(inputs)
@@ -86,7 +98,7 @@ for v in range(variants):
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
     simulator.wrap(model,optimizer,loss_function)
-    simulator.plot(precision)
+    simulator.plot(lower_saf + zero_saf + upper_saf)
 
     with tf.device('/GPU:0'):
         simulator.fit(x_test, y_test, epochs, train_dataset,variant_iteration=v)
