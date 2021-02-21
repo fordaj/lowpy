@@ -4,6 +4,7 @@ from tensorflow.keras import layers
 import os
 import pandas as pd
 import numpy as np
+from progress.bar import IncrementalBar
 
 class wrapper:
     def __init__(self,metrics,sigma=0.0, decay=1.0, precision=0, upper_bound=0.1, lower_bound=-0.1, noise=0):
@@ -150,20 +151,23 @@ class wrapper:
         test_loss.append(test_metrics[0])
         test_accuracy.append(test_metrics[1])
         print("--------------------------")
-        print("Baseline\tLoss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%")
+        print("Baseline\tLoss: ", "{:.4f}".format(test_metrics[0]), "\tAccuracy: ", "{:.2f}".format(test_metrics[1]*100),"%")
         for epoch in range(epochs):
-            for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-                #self.apply_stuck_at_faults()
-                self.grads = self.training_step(tf.constant(x_batch_train), tf.constant(y_batch_train))
-                self.apply_grads()
-                if self.precision > 0:
-                    self.truncate_center_state()
-                self.write_variability()
-                self.apply_decay()
-            test_metrics =  self.evaluate()
-            test_loss.append(test_metrics[0])
-            test_accuracy.append(test_metrics[1])
-            print("Epoch ",epoch, "\tLoss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%")
+            with IncrementalBar('Epoch ' + str(epoch), max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(test_metrics[0]) + "\tAccuracy: " + "{:.2f}".format(test_metrics[1]*100) + "%%") as bar:
+                for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
+                    #self.apply_stuck_at_faults()
+                    self.grads = self.training_step(tf.constant(x_batch_train), tf.constant(y_batch_train))
+                    self.apply_grads()
+                    if self.precision > 0:
+                        self.truncate_center_state()
+                    self.write_variability()
+                    self.apply_decay()
+                    bar.next()
+                test_metrics =  self.evaluate()
+                test_loss.append(test_metrics[0])
+                test_accuracy.append(test_metrics[1])
+                # bar.finish()
+                # print("\tLoss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%",end='')
         self.history.test.loss[self.header[variant_iteration]] = test_loss
         self.history.test.accuracy[self.header[variant_iteration]] = test_accuracy
         self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
