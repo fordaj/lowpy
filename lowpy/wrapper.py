@@ -181,7 +181,7 @@ class wrapper:
                 test_metrics =  self.evaluate()
                 test_loss.append(test_metrics[0])
                 test_accuracy.append(test_metrics[1])
-        print("\tFinal loss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%",end='')
+        print("\tFinal loss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%")
         self.history.test.loss[self.header[variant_iteration]] = test_loss
         self.history.test.accuracy[self.header[variant_iteration]] = test_accuracy
         self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
