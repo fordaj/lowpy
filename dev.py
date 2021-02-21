@@ -13,8 +13,8 @@ batch_size = 32
 # WHY ISNT THIS NORMALIZED?!?!?!
 #####################
 
-# x_train = np.reshape(x_train, (-1, 784))
-# x_test = np.reshape(x_test, (-1, 784))
+x_train = np.reshape(x_train, (-1, 784))
+x_test = np.reshape(x_test, (-1, 784))
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
   try:
@@ -51,7 +51,7 @@ y_test = np.int64(y_test)
 
 
 
-epochs = 10
+epochs = 1
 history = lp.metrics()
 variants = 11
 sigma = np.zeros(variants)
@@ -78,21 +78,23 @@ for v in range(variants):
       percent_stuck_at_upper_bound=upper_saf[v]
     )
 
+    inputs = keras.Input(shape=(784,), name="digits")
+    outputs = layers.Dense(10, name="predictions")(inputs)
+
     # inputs = keras.Input(shape=(784,), name="digits")
     # x1 = layers.Dense(533, activation="relu")(inputs)
     # outputs = layers.Dense(10, name="predictions")(x1)
 
-    inputs = keras.Input(shape=(28,28,1), name="digits")
-    c1 = layers.Conv2D(32, kernel_size=(3, 3), activation="relu")(inputs)
-    p1 = layers.MaxPooling2D(pool_size=(2, 2))(c1)
-    c2 = layers.Conv2D(64, kernel_size=(3, 3), activation="relu")(p1)
-    p2 = layers.MaxPooling2D(pool_size=(2, 2))(c2)
-    f1 = layers.Flatten()(p2)
-    d1 = layers.Dropout(0.5)(f1)
-    outputs = layers.Dense(10, activation="softmax")(d1)
+    # inputs = keras.Input(shape=(28,28,1), name="digits")
+    # c1 = layers.Conv2D(32, kernel_size=(3, 3), activation="relu")(inputs)
+    # p1 = layers.MaxPooling2D(pool_size=(2, 2))(c1)
+    # c2 = layers.Conv2D(64, kernel_size=(3, 3), activation="relu")(p1)
+    # p2 = layers.MaxPooling2D(pool_size=(2, 2))(c2)
+    # f1 = layers.Flatten()(p2)
+    # d1 = layers.Dropout(0.5)(f1)
+    # outputs = layers.Dense(10, activation="softmax")(d1)
 
     model = keras.Model(inputs=inputs, outputs=outputs)
-    #optimizer = keras.optimizers.SGD(learning_rate=0.001) #1LP:0.0012LP:0.0005
     optimizer = keras.optimizers.Adam()
     loss_function = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])

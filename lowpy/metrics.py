@@ -24,6 +24,8 @@ class metrics:
                     os.remove(trainLossFile)
                     if (shouldRemove != 'all'):
                         shouldRemove = 'u'
+                else:
+                    raise Exception("User aborted file overwrite.")
             if os.path.exists(trainAccuracyFile):
                 if (shouldRemove == 'u'):
                     shouldRemove = input("Are you sure you want to delete " + str(trainAccuracyFile) + "? (y/n/all): ")
@@ -31,6 +33,8 @@ class metrics:
                     os.remove(trainAccuracyFile)
                     if (shouldRemove != 'all'):
                         shouldRemove = 'u'
+                else:
+                    raise Exception("User aborted file overwrite.")
         if not os.path.exists(os.path.join(os.getcwd(), self.testDir)):
             os.mkdir(self.testDir)
         else:
@@ -43,6 +47,8 @@ class metrics:
                     os.remove(testLossFile)
                     if (shouldRemove != 'all'):
                         shouldRemove = 'u'
+                else:
+                    raise Exception("User aborted file overwrite.")
             if os.path.exists(testAccuracyFile):
                 if (shouldRemove == 'u'):
                     shouldRemove = input("Are you sure you want to delete " + str(testAccuracyFile) + "? (y/n/all): ")
@@ -50,6 +56,8 @@ class metrics:
                     os.remove(testAccuracyFile)
                     if (shouldRemove != 'all'):
                         shouldRemove = 'u'
+                else:
+                    raise Exception("User aborted file overwrite.")
         self.architecture   = pd.DataFrame()
     class trialData:
         def __init__(self):
