@@ -59,7 +59,6 @@ zero_saf = np.zeros(variants)
 upper_saf = np.zeros(variants)
 RTN = np.logspace(-1*variants+2,0,variants-1)
 RTN = np.insert(sigma,0,0,axis=0)
-RTN[0] = 0.5
 
 history = lp.metrics()
 
