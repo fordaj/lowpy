@@ -17,15 +17,15 @@ class wrapper:
         percent_stuck_at_lower_bound=0, 
         percent_stuck_at_zero=0, 
         percent_stuck_at_upper_bound=0,
-        noise=0
+        rtn_stdev=0
     ):
         self.history = metrics
         self.sigma = sigma
+        self.rtn_stdev = rtn_stdev
         self.decay = decay
         self.precision = precision
         self.upper_bound = upper_bound
         self.lower_bound = lower_bound
-        self.noise = noise
         self.range = abs(self.upper_bound) + abs(self.lower_bound)
         self.num_lower_saf = percent_stuck_at_lower_bound
         self.num_zero_saf = percent_stuck_at_zero
@@ -109,6 +109,23 @@ class wrapper:
             if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
                 weights[w].assign(tf.multiply(weights[w],self.decay))
         self.optimizer.apply_gradients(zip(self.zeros,weights))
+    
+    @tf.function
+    def apply_rtn(self):
+        self.rtn_weights = self.model.trainable_weights
+        weights = self.model.trainable_weights
+        for w in range(len(weights)):
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
+                weights[w].assign(tf.random.normal(weights[w].shape,mean=weights[w],stddev=self.rtn_stdev))
+        self.optimizer.apply_gradients(zip(self.zeros,weights))
+    
+    @tf.function
+    def remove_rtn(self):
+        weights = self.model.trainable_weights
+        for w in range(len(weights)):
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
+                weights[w].assign(self.rtn_weights[w])
+        self.optimizer.apply_gradients(zip(self.zeros,weights))
 
     @tf.function
     def truncate_center_state(self):
@@ -166,19 +183,24 @@ class wrapper:
         test_loss.append(test_metrics[0])
         test_accuracy.append(test_metrics[1])
         print("--------------------------")
+        print(self.header[variant_iteration])
         print("Baseline\tLoss: ", "{:.4f}".format(test_metrics[0]), "\tAccuracy: ", "{:.2f}".format(test_metrics[1]*100),"%")
         for epoch in range(epochs):
             with IncrementalBar('Epoch ' + str(epoch), max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(test_metrics[0]) + "\tAccuracy: " + "{:.2f}".format(test_metrics[1]*100) + "%%") as bar:
                 for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
+                    self.apply_rtn()
                     self.apply_stuck_at_faults()
                     self.grads = self.training_step(tf.constant(x_batch_train), tf.constant(y_batch_train))
+                    self.remove_rtn()
                     self.apply_grads()
                     if self.precision > 0:
                         self.truncate_center_state()
                     self.write_variability()
                     self.apply_decay()
                     bar.next()
+                self.apply_rtn()
                 test_metrics =  self.evaluate()
+                self.remove_rtn()
                 test_loss.append(test_metrics[0])
                 test_accuracy.append(test_metrics[1])
         print("\tFinal loss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%")
