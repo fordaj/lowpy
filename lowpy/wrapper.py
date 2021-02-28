@@ -2,7 +2,6 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 import os
-import pandas as pd
 import numpy as np
 from progress.bar import IncrementalBar
 
@@ -17,7 +16,11 @@ class wrapper:
         percent_stuck_at_lower_bound=0, 
         percent_stuck_at_zero=0, 
         percent_stuck_at_upper_bound=0,
-        rtn_stdev=0
+        rtn_stdev=0,
+        drift_rate_to_upper=1,
+        drift_rate_to_zero=1,
+        drift_rate_to_lower=1,
+        drift_rate_to_bounds=1
     ):
         self.history = metrics
         self.sigma = sigma
@@ -30,6 +33,10 @@ class wrapper:
         self.num_lower_saf = percent_stuck_at_lower_bound
         self.num_zero_saf = percent_stuck_at_zero
         self.num_upper_saf = percent_stuck_at_upper_bound
+        self.drift_rate_to_upper = drift_rate_to_upper
+        self.drift_rate_to_zero = drift_rate_to_zero
+        self.drift_rate_to_lower = drift_rate_to_lower
+        self.drift_rate_to_bounds = drift_rate_to_bounds
         self.tff_write_variability = tf.function(self.write_variability)
         self.tff_apply_decay = tf.function(self.apply_decay)
         self.tff_truncate_center_state = tf.function(self.truncate_center_state)
@@ -126,6 +133,7 @@ class wrapper:
             if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
                 weights[w].assign(self.rtn_weights[w])
         self.optimizer.apply_gradients(zip(self.zeros,weights))
+    
 
     @tf.function
     def truncate_center_state(self):
@@ -152,6 +160,17 @@ class wrapper:
                 bounds = tf.cast((self.lower_bound*self.stuck_at_lower_bound_matrix[w]) + (self.upper_bound*self.stuck_at_upper_bound_matrix[w]),weights[w].dtype)
                 weights[w].assign(bounds + weights[w] * not_stuck_at_lower_bound * not_stuck_at_zero * not_stuck_at_upper_bound)
         self.optimizer.apply_gradients(zip(self.zeros,weights))
+    
+    #@tf.function
+    def apply_drift(self):
+        weights = self.model.trainable_weights
+        for w in range(len(weights)):
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
+                weights[w].assign((weights[w] + self.range)*(1+self.drift_rate_to_upper)-self.range)
+                weights[w].assign((weights[w] + self.range)*(1-self.drift_rate_to_lower)-self.range)
+                weights[w].assign(weights[w]*(1-self.drift_rate_to_zero))
+                weights[w].assign(weights[w] + tf.sign(weights[w])*((self.upper_bound-tf.abs(weights[w]))*self.drift_rate_to_bounds))
+        self.optimizer.apply_gradients(zip(self.zeros,weights))
 
     def training_step(self, x_batch_train, y_batch_train):
         with tf.GradientTape() as tape:
@@ -160,6 +179,7 @@ class wrapper:
         return tape.gradient(loss_value, self.model.trainable_weights)
     
     def apply_grads(self):
+        self.previous_weights = self.model.trainable_weights
         self.optimizer.apply_gradients(zip(self.grads, self.model.trainable_weights))
 
     def evaluate(self):
@@ -190,6 +210,7 @@ class wrapper:
                 for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
                     self.apply_rtn()
                     self.apply_stuck_at_faults()
+                    self.apply_drift()
                     self.grads = self.training_step(tf.constant(x_batch_train), tf.constant(y_batch_train))
                     self.remove_rtn()
                     self.apply_grads()
@@ -212,4 +233,3 @@ class wrapper:
         del self.model
         del self.optimizer
         del self.loss_function
-

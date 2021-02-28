@@ -57,8 +57,18 @@ precision = np.zeros(variants)
 lower_saf = np.zeros(variants)
 zero_saf = np.zeros(variants)
 upper_saf = np.zeros(variants)
-RTN = np.logspace(-1*variants+2,0,variants-1)
-RTN = np.insert(sigma,0,0,axis=0)
+# RTN = np.logspace(-1*variants+2,0,variants-1)
+# RTN = np.insert(RTN,0,0,axis=0)
+RTN = np.zeros(variants)
+# upper_drift = np.linspace(0,0.1,variants)
+upper_drift = np.zeros(variants)
+# lower_drift = np.linspace(0,0.1,variants)
+lower_drift = np.zeros(variants)
+# zero_drift = np.linspace(0,0.1,variants)
+zero_drift = np.zeros(variants)
+bound_drift = np.linspace(0,0.1,variants)  
+# bound_drift = np.zeros(variants)
+
 
 history = lp.metrics()
 
@@ -73,7 +83,11 @@ for v in range(variants):
       percent_stuck_at_lower_bound=lower_saf[v],
       percent_stuck_at_zero=zero_saf[v],
       percent_stuck_at_upper_bound=upper_saf[v],
-      rtn_stdev=RTN[v]
+      rtn_stdev=RTN[v],
+      drift_rate_to_lower=lower_drift[v],
+      drift_rate_to_upper=upper_drift[v],
+      drift_rate_to_zero=zero_drift[v],
+      drift_rate_to_bounds=bound_drift[v]
     )
 
     inputs = keras.Input(shape=(784,), name="digits")
@@ -98,7 +112,7 @@ for v in range(variants):
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
     simulator.wrap(model,optimizer,loss_function)
-    simulator.plot(RTN)
+    simulator.plot(bound_drift)
 
     with tf.device('/GPU:0'):
         simulator.fit(x_test, y_test, epochs, train_dataset,variant_iteration=v)
