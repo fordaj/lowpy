@@ -40,7 +40,19 @@ class wrapper:
         self.tff_write_variability = tf.function(self.write_variability)
         self.tff_apply_decay = tf.function(self.apply_decay)
         self.tff_truncate_center_state = tf.function(self.truncate_center_state)
-        self.tff_training_step = tf.function(self.training_step)
+        self.tff_training_step = tf.function(self.step)
+
+        self.post_initialization = []
+        self.pre_train_forward_propagation = []
+        self.post_train_forward_propagation = []
+        self.pre_gradient_calculation = []
+        self.post_gradient_calculation = []
+        self.pre_gradient_application = []
+        self.post_gradient_application = []
+        self.pre_evaluation = []
+        self.post_evaluation = []
+        self.pre_inference = []
+        self.post_inference = []
 
     def wrap(self,model,optimizer,loss_function):
         self.model = model
@@ -172,22 +184,61 @@ class wrapper:
                 weights[w].assign(weights[w] + tf.sign(weights[w])*((self.upper_bound-tf.abs(weights[w]))*self.drift_rate_to_bounds))
         self.optimizer.apply_gradients(zip(self.zeros,weights))
 
-    def training_step(self, x_batch_train, y_batch_train):
+    def step(self, x_batch_train, y_batch_train):
+
+        # Pre Training Forward Propagation
+        for function in self.pre_train_forward_propagation:
+            function()
+        # Forward Propagation
         with tf.GradientTape() as tape:
             logits = self.model(x_batch_train, training=True)
             loss_value = self.loss_function(y_batch_train, logits)
-        return tape.gradient(loss_value, self.model.trainable_weights)
+        # Post Training Forward Propagation
+        for function in self.post_train_forward_propagation:
+            function()
+
+        # Pre Gradient Calculation
+        for function in self.pre_gradient_calculation:
+            function()
+        # Gradient Calculation
+        grad = tape.gradient(loss_value, self.model.trainable_weights)
+        # Post Gradient Calculation
+        for function in self.post_gradient_calculation:
+            function()
+
+        return grad
     
-    def apply_grads(self):
+    def apply_gradients(self):
         self.previous_weights = self.model.trainable_weights
+        # Pre Gradient Application
+        for function in self.pre_gradient_application:
+            function()
         self.optimizer.apply_gradients(zip(self.grads, self.model.trainable_weights))
+        # Post Gradient Application
+        for function in self.post_gradient_application:
+            function()
 
     def evaluate(self):
-        logits = self.model(self.x_test)
+        # Pre Testing Forward Propagation
+        for function in self.pre_evaluation:
+            function()
+        for x,y in zip(self.x_test,self.y_test):
+            # Pre Inference
+            for function in self.pre_inference:
+                function()
+            try: # to append the next prediction vector onto logits
+                logits = tf.concat([logits,self.model(tf.expand_dims(x, axis=0),tf.expand_dims(y, axis=0))],0)
+            except: # when logits doesn't exist, initialize it
+                logits = self.model(tf.expand_dims(x, axis=0),tf.expand_dims(y, axis=0))
+            # Post Inference
+            for function in self.post_inference:
+                function()
+        # Post Testing Forward Propagation
+        for function in self.post_evaluation:
+            function()
         loss = self.loss_function(self.y_test, logits)
         one = tf.argmax(logits,1)
         two = tf.cast(self.y_test,one.dtype)
-
         accuracy = tf.math.count_nonzero(tf.math.equal(one,two)) / len(self.y_test)
         return [loss.numpy(),accuracy.numpy()]
 
@@ -195,36 +246,41 @@ class wrapper:
         self.x_test = x_test
         self.y_test = y_test
         self.weight_zeros()
-        self.initialization_variability()
-        self.initialize_stuck_at_fault_matrices()
-        test_loss = []
-        test_accuracy = []
-        test_metrics = self.evaluate()
-        test_loss.append(test_metrics[0])
-        test_accuracy.append(test_metrics[1])
+        # Post Initialization
+        for function in self.post_initialization:
+            function()
+        # Baseline Evaluation
+        (loss,accuracy) = self.evaluate()
+        test_loss       = [loss]
+        test_accuracy   = [accuracy]
+
+        # Console output
         print("--------------------------")
         print(self.header[variant_iteration])
-        print("Baseline\tLoss: ", "{:.4f}".format(test_metrics[0]), "\tAccuracy: ", "{:.2f}".format(test_metrics[1]*100),"%")
+        print("Baseline\tLoss: ", "{:.4f}".format(loss), "\tAccuracy: ", "{:.2f}".format(accuracy*100),"%")
+
+        # Fitting
         for epoch in range(epochs):
-            with IncrementalBar('Epoch ' + str(epoch), max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(test_metrics[0]) + "\tAccuracy: " + "{:.2f}".format(test_metrics[1]*100) + "%%") as bar:
+            with IncrementalBar('Epoch ' + str(epoch), max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(loss) + "\tAccuracy: " + "{:.2f}".format(accuracy*100) + "%%") as bar:
                 for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-                    self.apply_rtn()
-                    self.apply_stuck_at_faults()
-                    self.apply_drift()
-                    self.grads = self.training_step(tf.constant(x_batch_train), tf.constant(y_batch_train))
-                    self.remove_rtn()
-                    self.apply_grads()
-                    if self.precision > 0:
-                        self.truncate_center_state()
-                    self.write_variability()
-                    self.apply_decay()
+                    
+                    # self.apply_rtn()
+                    # self.apply_stuck_at_faults()
+                    # self.apply_drift()
+                    self.grads = self.step(tf.constant(x_batch_train), tf.constant(y_batch_train))
+                    # self.remove_rtn()
+                    self.apply_gradients()
+                    # if self.precision > 0:
+                    #     self.truncate_center_state()
+                    # self.write_variability()
+                    # self.apply_decay()
                     bar.next()
-                self.apply_rtn()
-                test_metrics =  self.evaluate()
-                self.remove_rtn()
-                test_loss.append(test_metrics[0])
-                test_accuracy.append(test_metrics[1])
-        print("\tFinal loss: ", test_metrics[0], "\tAccuracy: ", test_metrics[1]*100,"%")
+                # self.apply_rtn()
+                (loss,accuracy) =  self.evaluate()
+                # self.remove_rtn()
+                test_loss.append(loss)
+                test_accuracy.append(accuracy)
+        print("\tFinal loss: ", loss, "\tAccuracy: ", accuracy*100,"%")
         self.history.test.loss[self.header[variant_iteration]] = test_loss
         self.history.test.accuracy[self.header[variant_iteration]] = test_accuracy
         self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")

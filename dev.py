@@ -111,6 +111,11 @@ for v in range(variants):
     loss_function = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
+    simulator.post_initialization = [
+      simulator.initialization_variability,
+      simulator.initialize_stuck_at_fault_matrices
+    ]
+
     simulator.wrap(model,optimizer,loss_function)
     simulator.plot(bound_drift)
 
