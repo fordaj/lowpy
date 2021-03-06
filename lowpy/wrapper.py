@@ -173,7 +173,7 @@ class wrapper:
                 weights[w].assign(bounds + weights[w] * not_stuck_at_lower_bound * not_stuck_at_zero * not_stuck_at_upper_bound)
         self.optimizer.apply_gradients(zip(self.zeros,weights))
     
-    #@tf.function
+    @tf.function
     def apply_drift(self):
         weights = self.model.trainable_weights
         for w in range(len(weights)):
