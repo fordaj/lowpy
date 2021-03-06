@@ -17,10 +17,10 @@ class wrapper:
         percent_stuck_at_zero=0, 
         percent_stuck_at_upper_bound=0,
         rtn_stdev=0,
-        drift_rate_to_upper=1,
-        drift_rate_to_zero=1,
-        drift_rate_to_lower=1,
-        drift_rate_to_bounds=1
+        drift_rate_to_upper=0,
+        drift_rate_to_zero=0,
+        drift_rate_to_lower=0,
+        drift_rate_to_bounds=0
     ):
         self.history = metrics
         self.sigma = sigma
