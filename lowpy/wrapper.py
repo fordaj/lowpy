@@ -255,7 +255,6 @@ class wrapper:
     def add_test_metrics_entry(self, loss, accuracy, header):
         try:
             self.history.test.loss[header]
-            self.history.test.loss[header] = {header:[loss]} 
         except:
             self.history.test.loss = self.history.test.loss.append(pd.DataFrame({header:[loss]}),ignore_index=True)
         self.history.test.accuracy = self.history.test.accuracy.append(pd.DataFrame({header:[accuracy]}),ignore_index=True)
