@@ -111,16 +111,25 @@ for v in range(variants):
     loss_function = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
-    simulator.post_initialization = [
-      simulator.initialization_variability,
-      simulator.initialize_stuck_at_fault_matrices
+    simulator.pre_train_forward_propagation = [
+      simulator.apply_drift
     ]
 
     simulator.wrap(model,optimizer,loss_function)
     simulator.plot(bound_drift)
+    
+    simulator.add_test_metrics_entry(0.5,0.8, bound_drift[v])
+
+    simulator.add_test_metrics_entry(0.4,0.85, bound_drift[v])
+    simulator.add_test_metrics_entry(0.3,0.9, bound_drift[v+1])
+
+    model.fit(x_train, y_train, batch_size=32)
+
+    print(simulator.evaluate(x_test,y_test))
+
 
     with tf.device('/GPU:0'):
-        simulator.fit(x_test, y_test, epochs, train_dataset,variant_iteration=v)
+        simulator.fit(epochs, train_dataset, variant_iteration=v)
     tf.keras.backend.clear_session()
     del model
     del optimizer

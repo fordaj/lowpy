@@ -4,6 +4,7 @@ from tensorflow.keras import layers
 import os
 import numpy as np
 from progress.bar import IncrementalBar
+import pandas as pd
 
 class wrapper:
     def __init__(self,
@@ -63,12 +64,18 @@ class wrapper:
         self.header = varied_parameter
 
     def weight_zeros(self):
+        """
+        Creates tensors of zeros identical dimensionally to that of the model's trainable weights.
+        """
         weights = self.model.trainable_weights
         self.zeros = []
         for w in weights:
             self.zeros.append(tf.Variable(tf.zeros(w.shape,dtype=tf.dtypes.float32)))
 
     def initialization_variability(self):
+        """
+        Applies write variability to the weights post-initialization.
+        """
         weights = []
         for l in self.model.layers:
             for w in range(len(l.weights)):
@@ -173,7 +180,7 @@ class wrapper:
                 weights[w].assign(bounds + weights[w] * not_stuck_at_lower_bound * not_stuck_at_zero * not_stuck_at_upper_bound)
         self.optimizer.apply_gradients(zip(self.zeros,weights))
     
-    #@tf.function
+    @tf.function
     def apply_drift(self):
         weights = self.model.trainable_weights
         for w in range(len(weights)):
@@ -218,41 +225,53 @@ class wrapper:
         for function in self.post_gradient_application:
             function()
 
-    def evaluate(self):
+    
+
+    def evaluate(self, x, y):
+        self.weight_zeros()
         # Pre Testing Forward Propagation
         for function in self.pre_evaluation:
             function()
-        for x,y in zip(self.x_test,self.y_test):
+        for x_step, y_step in zip(x,y):
             # Pre Inference
             for function in self.pre_inference:
                 function()
             try: # to append the next prediction vector onto logits
-                logits = tf.concat([logits,self.model(tf.expand_dims(x, axis=0),tf.expand_dims(y, axis=0))],0)
+                logits = tf.concat([logits,self.model(tf.expand_dims(x_step, axis=0),tf.expand_dims(y_step, axis=0))],0)
             except: # when logits doesn't exist, initialize it
-                logits = self.model(tf.expand_dims(x, axis=0),tf.expand_dims(y, axis=0))
+                logits = self.model(tf.expand_dims(x_step, axis=0),tf.expand_dims(y_step, axis=0))
             # Post Inference
             for function in self.post_inference:
                 function()
         # Post Testing Forward Propagation
         for function in self.post_evaluation:
             function()
-        loss = self.loss_function(self.y_test, logits)
+        loss = self.loss_function(y, logits)
         one = tf.argmax(logits,1)
-        two = tf.cast(self.y_test,one.dtype)
-        accuracy = tf.math.count_nonzero(tf.math.equal(one,two)) / len(self.y_test)
+        two = tf.cast(y,one.dtype)
+        accuracy = tf.math.count_nonzero(tf.math.equal(one,two)) / len(y)
         return [loss.numpy(),accuracy.numpy()]
 
-    def fit(self, x_test, y_test, epochs, train_dataset,variant_iteration=0):
-        self.x_test = x_test
-        self.y_test = y_test
+    def add_test_metrics_entry(self, loss, accuracy, header):
+        try:
+            self.history.test.loss[header]
+            self.history.test.loss[header] = {header:[loss]} 
+        except:
+            self.history.test.loss = self.history.test.loss.append(pd.DataFrame({header:[loss]}),ignore_index=True)
+        self.history.test.accuracy = self.history.test.accuracy.append(pd.DataFrame({header:[accuracy]}),ignore_index=True)
+        self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
+        self.history.test.accuracy.to_csv(self.history.testDir + "/Accuracy.csv")
+        
+
+    def fit(self, epochs, train_dataset, variant_iteration=0):
         self.weight_zeros()
         # Post Initialization
         for function in self.post_initialization:
             function()
         # Baseline Evaluation
         (loss,accuracy) = self.evaluate()
-        test_loss       = [loss]
-        test_accuracy   = [accuracy]
+        self.test_loss       = [loss]
+        self.test_accuracy   = [accuracy]
 
         # Console output
         print("--------------------------")
@@ -263,28 +282,13 @@ class wrapper:
         for epoch in range(epochs):
             with IncrementalBar('Epoch ' + str(epoch), max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(loss) + "\tAccuracy: " + "{:.2f}".format(accuracy*100) + "%%") as bar:
                 for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-                    
-                    # self.apply_rtn()
-                    # self.apply_stuck_at_faults()
-                    # self.apply_drift()
                     self.grads = self.step(tf.constant(x_batch_train), tf.constant(y_batch_train))
-                    # self.remove_rtn()
                     self.apply_gradients()
-                    # if self.precision > 0:
-                    #     self.truncate_center_state()
-                    # self.write_variability()
-                    # self.apply_decay()
                     bar.next()
-                # self.apply_rtn()
                 (loss,accuracy) =  self.evaluate()
-                # self.remove_rtn()
-                test_loss.append(loss)
-                test_accuracy.append(accuracy)
+                self.test_loss.append(loss)
+                self.test_accuracy.append(accuracy)
         print("\tFinal loss: ", loss, "\tAccuracy: ", accuracy*100,"%")
-        self.history.test.loss[self.header[variant_iteration]] = test_loss
-        self.history.test.accuracy[self.header[variant_iteration]] = test_accuracy
-        self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
-        self.history.test.accuracy.to_csv(self.history.testDir + "/Accuracy.csv")
         tf.keras.backend.clear_session()
         del self.model
         del self.optimizer
