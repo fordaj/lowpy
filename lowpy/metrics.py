@@ -1,65 +1,36 @@
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
 import os
 import pandas as pd
+import datetime
 
- # Track model data
 class metrics:
     def __init__(self):
-        self.train          = self.trialData()
-        self.test           = self.trialData()
-        self.trainDir       = "Train"
-        self.testDir        = "Test"
-        shouldRemove = 'u'
-        if not os.path.exists(os.path.join(os.getcwd(), self.trainDir)):
-            os.mkdir(self.trainDir)
-        else:
-            trainLossFile = os.path.join(os.getcwd(), self.trainDir, "Loss.csv")
-            trainAccuracyFile = os.path.join(os.getcwd(), self.trainDir, "Accuracy.csv")
-            if os.path.exists(trainLossFile):
-                if (shouldRemove == 'u'):
-                    shouldRemove = input("Are you sure you want to delete " + str(trainLossFile) + " ? (y/n/all): ")
-                if (shouldRemove == 'y' or shouldRemove == 'all'):
-                    os.remove(trainLossFile)
-                    if (shouldRemove != 'all'):
-                        shouldRemove = 'u'
-                else:
-                    raise Exception("User aborted file overwrite.")
-            if os.path.exists(trainAccuracyFile):
-                if (shouldRemove == 'u'):
-                    shouldRemove = input("Are you sure you want to delete " + str(trainAccuracyFile) + "? (y/n/all): ")
-                if (shouldRemove == 'y' or shouldRemove == 'all'):
-                    os.remove(trainAccuracyFile)
-                    if (shouldRemove != 'all'):
-                        shouldRemove = 'u'
-                else:
-                    raise Exception("User aborted file overwrite.")
-        if not os.path.exists(os.path.join(os.getcwd(), self.testDir)):
-            os.mkdir(self.testDir)
-        else:
-            testLossFile = os.path.join(os.getcwd(), self.testDir, "Loss.csv")
-            testAccuracyFile = os.path.join(os.getcwd(), self.testDir, "Accuracy.csv")
-            if os.path.exists(testLossFile):
-                if (shouldRemove == 'u'):
-                    shouldRemove = input("Are you sure you want to delete " + str(testLossFile) + "? (y/n/all): ")
-                if (shouldRemove == 'y' or shouldRemove == 'all'):
-                    os.remove(testLossFile)
-                    if (shouldRemove != 'all'):
-                        shouldRemove = 'u'
-                else:
-                    raise Exception("User aborted file overwrite.")
-            if os.path.exists(testAccuracyFile):
-                if (shouldRemove == 'u'):
-                    shouldRemove = input("Are you sure you want to delete " + str(testAccuracyFile) + "? (y/n/all): ")
-                if (shouldRemove == 'y' or shouldRemove == 'all'):
-                    os.remove(testAccuracyFile)
-                    if (shouldRemove != 'all'):
-                        shouldRemove = 'u'
-                else:
-                    raise Exception("User aborted file overwrite.")
+        self.directory_name    = "LowPy " + str(datetime.datetime.now())
+        self.accuracy          = self.trialData(self.directory_name, "Accuracy")
+        self.loss              = self.trialData(self.directory_name, "Loss")
+        self.updates           = self.trialData(self.directory_name, "Updates")
+        os.mkdir(self.directory_name)
         self.architecture   = pd.DataFrame()
     class trialData:
-        def __init__(self):
-            self.accuracy   = pd.DataFrame()
-            self.loss       = pd.DataFrame()
+        def __init__(self, directory_name, file_name):
+            self.file_name_full = os.path.join(os.getcwd(), directory_name, file_name + ".csv")
+            self.data   = pd.DataFrame()
+        def add_value(self, value, index, header):
+            # try: # to access the column, and subsequently append new value
+            #     self.data[header]
+            #     self.data = self.data[header].dropna().append(pd.DataFrame({0:[value]}),ignore_index=True)
+            # except: # when the column is uninitialized
+            #     try: # and add a column to the existing dataframe
+            #         self.data[header] = pd.DataFrame({header:[value]})
+            #     except: # when the dataframe is empty
+            #         self.data[header] = [value]
+            # try:
+            #     self.data[header]
+            #     self.data = pd.concat([self.data,pd.DataFrame([[value]],columns=[header],index=[index])],axis=0)
+            # except:
+            #     self.data = pd.concat([self.data,pd.DataFrame([[value]],columns=[header],index=[index])],axis=1)
+            self.data.at[index,header] = value
+            self.data.to_csv(self.file_name_full)
+    def export_weights(self, updates_directory_name, cell_updates):
+        os.mkdir(self.directory_name + "/" + str(updates_directory_name))
+        for i in range(len(cell_updates)):
+            pd.DataFrame(cell_updates[i].numpy()).to_csv(self.directory_name + "/" + str(updates_directory_name) + "/Weights" + str(i) + ".csv")

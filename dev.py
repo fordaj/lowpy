@@ -24,18 +24,6 @@ if gpus:
 batch_size    = 32
 x_train       = np.reshape(x_train, (-1, 784)) / 255
 x_test        = np.reshape(x_test, (-1, 784)) / 255
-x_val         = x_train[-10000:]
-y_val         = y_train[-10000:]
-x_train       = x_train[:-10000]
-y_train       = y_train[:-10000]
-x_test        = tf.constant(x_test)
-y_test        = tf.constant(y_test)
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
-val_dataset   = tf.data.Dataset.from_tensor_slices((x_val, y_val))
-val_dataset   = val_dataset.batch(batch_size)
-
-y_test = np.int64(y_test)
 
 
 
@@ -69,13 +57,13 @@ zero_drift = np.zeros(variants)
 bound_drift = np.linspace(0,0.1,variants)  
 # bound_drift = np.zeros(variants)
 
-
 history = lp.metrics()
+
 
 for v in range(variants):
     tf.keras.backend.clear_session()
     simulator = lp.wrapper(history,
-      sigma=sigma[v], 
+      variability_stdev=sigma[v], 
       decay=decay[v],
       precision=precision[v],
       upper_bound=0.1,
@@ -111,17 +99,22 @@ for v in range(variants):
     loss_function = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
-    simulator.post_initialization = [
-      simulator.initialization_variability,
-      simulator.initialize_stuck_at_fault_matrices
+    # simulator.post_initialization = [
+    #   simulator.initialization_variability,
+    #   simulator.initialize_stuck_at_fault_matrices
+    # ]
+    simulator.post_gradient_calculation = [
+      simulator.track_weight_updates
     ]
+    
 
     simulator.wrap(model,optimizer,loss_function)
     simulator.plot(bound_drift)
 
-    with tf.device('/GPU:0'):
-        simulator.fit(x_test, y_test, epochs, train_dataset,variant_iteration=v)
-    tf.keras.backend.clear_session()
-    del model
-    del optimizer
-    del loss_function
+
+    
+
+    with tf.device('/CPU:0'):
+        simulator.fit(x=x_train, y=y_train, batch_size=32, epochs=2, variant_number=v, validation_split=0.1)
+
+    simulator.metrics.export_weights("Variant"+str(v), simulator.cell_updates)

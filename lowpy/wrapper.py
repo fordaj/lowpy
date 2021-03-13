@@ -3,12 +3,15 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import os
 import numpy as np
+import pandas as pd
+import datetime
 from progress.bar import IncrementalBar
+from progress.bar import Bar
 
 class wrapper:
     def __init__(self,
         metrics,
-        sigma=0.0, 
+        variability_stdev=0.0, 
         decay=1.0, 
         precision=0, 
         upper_bound=0.1, 
@@ -22,8 +25,8 @@ class wrapper:
         drift_rate_to_lower=0,
         drift_rate_to_bounds=0
     ):
-        self.history = metrics
-        self.sigma = sigma
+        self.metrics = metrics
+        self.variability_stdev = variability_stdev
         self.rtn_stdev = rtn_stdev
         self.decay = decay
         self.precision = precision
@@ -54,10 +57,12 @@ class wrapper:
         self.pre_inference = []
         self.post_inference = []
 
+
     def wrap(self,model,optimizer,loss_function):
         self.model = model
         self.optimizer = optimizer
         self.loss_function = loss_function
+        self.weight_zeros()
 
     def plot(self,varied_parameter):
         self.header = varied_parameter
@@ -67,13 +72,14 @@ class wrapper:
         self.zeros = []
         for w in weights:
             self.zeros.append(tf.Variable(tf.zeros(w.shape,dtype=tf.dtypes.float32)))
+        self.cell_updates = self.zeros
 
     def initialization_variability(self):
         weights = []
         for l in self.model.layers:
             for w in range(len(l.weights)):
                 if (not 'conv' in l.weights[w].name) and (not 'embed' in l.weights[w].name):
-                    weights.append(tf.random.normal(l.weights[w].shape,mean=l.weights[w],stddev=self.sigma))
+                    weights.append(tf.random.normal(l.weights[w].shape,mean=l.weights[w],stddev=self.variability_stdev))
 
     def initialize_stuck_at_fault_matrices(self):
         self.stuck_at_lower_bound_matrix = []
@@ -118,7 +124,7 @@ class wrapper:
         weights = self.model.trainable_weights
         for w in range(len(weights)):
             if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
-                weights[w].assign(tf.random.normal(weights[w].shape,mean=weights[w],stddev=self.sigma))
+                weights[w].assign(tf.random.normal(weights[w].shape,mean=weights[w],stddev=self.variability_stdev))
         self.optimizer.apply_gradients(zip(self.zeros,weights))
 
     @tf.function
@@ -184,15 +190,30 @@ class wrapper:
                 weights[w].assign(weights[w] + tf.sign(weights[w])*((self.upper_bound-tf.abs(weights[w]))*self.drift_rate_to_bounds))
         self.optimizer.apply_gradients(zip(self.zeros,weights))
 
-    def step(self, x_batch_train, y_batch_train):
+    def track_weight_updates(self):
+        for g in range(len(self.grad)):
+            self.cell_updates[g].assign_add(tf.cast(self.grad[g] != 0, self.cell_updates[g].dtype))
+
+    def step(self, x_step, y_step):
+        """
+        Training step function.
+        1.) pre_training_forward_propagation
+        2.) Forward Propagation
+        3.) post_training_forward_propagation
+        4.) pre_gradient_calculation
+        5.) Gradient Calculation
+        6.) post_gradient_calculation
+        """
 
         # Pre Training Forward Propagation
         for function in self.pre_train_forward_propagation:
             function()
+
         # Forward Propagation
         with tf.GradientTape() as tape:
-            logits = self.model(x_batch_train, training=True)
-            loss_value = self.loss_function(y_batch_train, logits)
+            logits = self.model(x_step, training=True)
+            loss_value = self.loss_function(y_step, logits)
+
         # Post Training Forward Propagation
         for function in self.post_train_forward_propagation:
             function()
@@ -200,92 +221,126 @@ class wrapper:
         # Pre Gradient Calculation
         for function in self.pre_gradient_calculation:
             function()
+
         # Gradient Calculation
-        grad = tape.gradient(loss_value, self.model.trainable_weights)
+        self.grad = tape.gradient(loss_value, self.model.trainable_weights)
+
         # Post Gradient Calculation
         for function in self.post_gradient_calculation:
             function()
-
-        return grad
     
     def apply_gradients(self):
-        self.previous_weights = self.model.trainable_weights
+        """
+        Gradient application function.
+        1.) pre_gradient_application
+        2.) Gradient Application
+        3.) post_gradient_application
+        """
+
         # Pre Gradient Application
         for function in self.pre_gradient_application:
             function()
-        self.optimizer.apply_gradients(zip(self.grads, self.model.trainable_weights))
+
+        self.optimizer.apply_gradients(zip(self.grad, self.model.trainable_weights))
+
         # Post Gradient Application
         for function in self.post_gradient_application:
             function()
 
-    def evaluate(self):
+    def evaluate(self, x, y, batch_size = 1, verbose = 1):
+        # Batch dataset
+        evaluation_dataset = tf.data.Dataset.from_tensor_slices((x, y)).batch(batch_size)
+        
         # Pre Testing Forward Propagation
         for function in self.pre_evaluation:
             function()
-        for x,y in zip(self.x_test,self.y_test):
-            # Pre Inference
-            for function in self.pre_inference:
-                function()
-            try: # to append the next prediction vector onto logits
-                logits = tf.concat([logits,self.model(tf.expand_dims(x, axis=0),tf.expand_dims(y, axis=0))],0)
-            except: # when logits doesn't exist, initialize it
-                logits = self.model(tf.expand_dims(x, axis=0),tf.expand_dims(y, axis=0))
-            # Post Inference
-            for function in self.post_inference:
-                function()
-        # Post Testing Forward Propagation
+
+        with Bar('Evaluation:\t', max=len(evaluation_dataset)) as bar:
+            for step, (x_step, y_step) in enumerate(evaluation_dataset):
+                # Pre Inference
+                for function in self.pre_inference:
+                    function()
+                
+                try: # to append the next prediction vector onto logits
+                    logits = tf.concat([logits,self.model(x_step)],0)
+                except: # when logits doesn't exist, initialize it
+                    logits = self.model(x_step)
+                
+                # Post Inference
+                for function in self.post_inference:
+                    function()
+                bar.next()
+        
+        # Post Evaluation
         for function in self.post_evaluation:
             function()
-        loss = self.loss_function(self.y_test, logits)
-        one = tf.argmax(logits,1)
-        two = tf.cast(self.y_test,one.dtype)
-        accuracy = tf.math.count_nonzero(tf.math.equal(one,two)) / len(self.y_test)
+        y = np.concatenate([y for x, y in evaluation_dataset], axis=0)
+        loss = self.loss_function(y, logits)
+        winningNeurons = tf.argmax(logits,1)
+        labels = tf.cast(y,winningNeurons.dtype)
+        accuracy = tf.math.count_nonzero(tf.math.equal(winningNeurons,labels)) / len(y)
         return [loss.numpy(),accuracy.numpy()]
 
-    def fit(self, x_test, y_test, epochs, train_dataset,variant_iteration=0):
-        self.x_test = x_test
-        self.y_test = y_test
-        self.weight_zeros()
-        # Post Initialization
+    def fit(self, x = None, y = None, batch_size = 1, epochs = 10, variant_number = 0, verbose = 1, validation_split = 0, validation_data = None, validation_batch_size = 1, shuffle = True):
+        """
+        Trains a model with nonidealities on a dataset over a specified number of epochs.
+
+        Arguments
+        x: Training data in the form of a matrix.
+        y: Target data (labels) in the form of a vector.
+        batch_size: Number of inputs per batch of training. Defaults to 1.
+        epochs: Number of epochs before fitting process ends. Defaults to 10.
+        variant_number: If simulating multiple model variants, represents the index of the model simulated.
+        verbose: Descriptivity of the fitting process. 1 = console logging, 0 = none.
+        validation_split: Float between 0 and 1 representative of the portion of the training dataset to be split for validation.
+        validation_data: Validation data for model fitness evaluation. Should be a list (x_val, y_val). Overrides validation split.
+        validation_batch_size: Number of inputs per batch of validation. Defaults to 1.
+        shuffle: Defaults to True. Shuffles training dataset
+        """
+
+        # Split into validation and training datasets
+        numInputs = len(y)
+        if (validation_data is None):
+            numValidation   = round(numInputs*validation_split)
+            numTrain        = numInputs - numValidation
+            x_validation    = x[numTrain:]
+            y_validation    = y[numTrain:]
+        else:
+            numTrain        = numInputs
+            x_validation    = validation_data[0]
+            y_validation    = validation_data[1]
+        x_train = x[:numTrain]
+        y_train = y[:numTrain]
+        train_dataset           = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+
+        # Batch training dataset and shuffle (if applicable)
+        if (shuffle):
+            train_dataset       = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
+        else:
+            train_dataset       = train_dataset.batch(batch_size)
+        
+        # Simulate post initialization nonidealities
         for function in self.post_initialization:
             function()
-        # Baseline Evaluation
-        (loss,accuracy) = self.evaluate()
+
+        # Baseline validation
+        print("--------------------------")
+        (loss,accuracy) = self.evaluate(x=x_validation, y=y_validation)
         test_loss       = [loss]
         test_accuracy   = [accuracy]
-
-        # Console output
-        print("--------------------------")
-        print(self.header[variant_iteration])
+        print("Variant Number: ", str(variant_number))
         print("Baseline\tLoss: ", "{:.4f}".format(loss), "\tAccuracy: ", "{:.2f}".format(accuracy*100),"%")
-
+        self.metrics.loss.add_value(loss, 0, variant_number)
+        self.metrics.accuracy.add_value(accuracy, 0, variant_number)
         # Fitting
-        for epoch in range(epochs):
-            with IncrementalBar('Epoch ' + str(epoch), max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(loss) + "\tAccuracy: " + "{:.2f}".format(accuracy*100) + "%%") as bar:
-                for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-                    
-                    # self.apply_rtn()
-                    # self.apply_stuck_at_faults()
-                    # self.apply_drift()
-                    self.grads = self.step(tf.constant(x_batch_train), tf.constant(y_batch_train))
-                    # self.remove_rtn()
+        for epoch in range(1,epochs+1):
+            with IncrementalBar('Epoch ' + str(epoch) + '\t\t', max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(loss) + "\tAccuracy: " + "{:.2f}".format(accuracy*100) + "%%") as bar:
+                for step, (x_step, y_step) in enumerate(train_dataset):
+                    self.step(tf.constant(x_step), tf.constant(y_step))
                     self.apply_gradients()
-                    # if self.precision > 0:
-                    #     self.truncate_center_state()
-                    # self.write_variability()
-                    # self.apply_decay()
                     bar.next()
-                # self.apply_rtn()
-                (loss,accuracy) =  self.evaluate()
-                # self.remove_rtn()
-                test_loss.append(loss)
-                test_accuracy.append(accuracy)
+                print("")
+                (loss,accuracy) =  self.evaluate(x=x_validation, y=y_validation)
+                self.metrics.loss.add_value(loss, epoch, variant_number)
+                self.metrics.accuracy.add_value(accuracy, epoch, variant_number)
         print("\tFinal loss: ", loss, "\tAccuracy: ", accuracy*100,"%")
-        self.history.test.loss[self.header[variant_iteration]] = test_loss
-        self.history.test.accuracy[self.header[variant_iteration]] = test_accuracy
-        self.history.test.loss.to_csv(self.history.testDir + "/Loss.csv")
-        self.history.test.accuracy.to_csv(self.history.testDir + "/Accuracy.csv")
-        tf.keras.backend.clear_session()
-        del self.model
-        del self.optimizer
-        del self.loss_function
