@@ -4,7 +4,7 @@ import datetime
 
 class metrics:
     def __init__(self):
-        self.directory_name    = "LowPy " + str(datetime.datetime.now())
+        self.directory_name    = "LowPy " + str(datetime.datetime.now().strftime("%Y-%m-%d %H_%M_%S"))
         self.accuracy          = self.trialData(self.directory_name, "Accuracy")
         self.loss              = self.trialData(self.directory_name, "Loss")
         self.updates           = self.trialData(self.directory_name, "Updates")
