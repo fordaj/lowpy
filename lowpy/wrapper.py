@@ -192,7 +192,10 @@ class wrapper:
 
     def track_weight_updates(self):
         for g in range(len(self.grad)):
-            self.cell_updates[g].assign_add(tf.cast(self.grad[g] != 0, self.cell_updates[g].dtype))
+            try:
+                self.cell_updates[g].assign_add(tf.cast(self.grad[g] != 0, self.cell_updates[g].dtype))
+            except:
+                pass
 
     def step(self, x_step, y_step):
         """
