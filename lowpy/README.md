@@ -12,9 +12,13 @@ python3 setup.py sdist bdist_wheel
 ```
 python3 -m twine upload dist/*
 ```
-5. To upgrade, enter the current version as an argument in pip3:
+5. To upgrade to the latest version of lowpy:
 ```
-pip3 install lowpy==1.0.0
+pip3 install --upgrade lowpy
+```
+Or, a specific version of lowpy:
+```
+pip3 install lowpy==0.4.3
 ```
 Note: May have to wait a minute or so for the new files to upload to PyPI.
 
