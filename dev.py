@@ -44,50 +44,34 @@ y_test = np.int64(y_test)
 
 epochs = 5
 variants = 11
-sigma = np.zeros(variants)
+upper_bound = 0.1
+lower_bound = -0.1
 # sigma = np.logspace(-1*variants+2,0,variants-1)
 # sigma = np.insert(sigma,0,0,axis=0)
 # decay = np.linspace(1.0,0.94,variants)
-decay = np.ones(variants)
 # precision = np.power(2,np.arange(variants)+1)[::-1]
-precision = np.zeros(variants)
 # lower_saf = np.linspace(0,0.1,variants)
 # zero_saf = np.linspace(0,0.1,variants)
 # upper_saf = np.linspace(0,0.1,variants)
-lower_saf = np.zeros(variants)
-zero_saf = np.zeros(variants)
-upper_saf = np.zeros(variants)
 # RTN = np.logspace(-1*variants+2,0,variants-1)
 # RTN = np.insert(RTN,0,0,axis=0)
-RTN = np.zeros(variants)
 # upper_drift = np.linspace(0,0.1,variants)
-upper_drift = np.zeros(variants)
 # lower_drift = np.linspace(0,0.1,variants)
-lower_drift = np.zeros(variants)
 # zero_drift = np.linspace(0,0.1,variants)
-zero_drift = np.zeros(variants)
-bound_drift = np.linspace(0,0.1,variants)  
-# bound_drift = np.zeros(variants)
+# bound_drift = np.linspace(0,0.1,variants)  
+percent_weights_dropping = np.linspace(0,0.1,variants)
+weight_drop_destination = 0.8 * lower_bound
 
 
 history = lp.metrics()
 
 for v in range(variants):
     tf.keras.backend.clear_session()
-    simulator = lp.wrapper(history,
-      sigma=sigma[v], 
-      decay=decay[v],
-      precision=precision[v],
-      upper_bound=0.1,
-      lower_bound=-0.1,
-      percent_stuck_at_lower_bound=lower_saf[v],
-      percent_stuck_at_zero=zero_saf[v],
-      percent_stuck_at_upper_bound=upper_saf[v],
-      rtn_stdev=RTN[v],
-      drift_rate_to_lower=lower_drift[v],
-      drift_rate_to_upper=upper_drift[v],
-      drift_rate_to_zero=zero_drift[v],
-      drift_rate_to_bounds=bound_drift[v]
+    simulator = lp.wrapper(history, 
+      upper_bound=upper_bound
+      lower_bound=lower_bound
+      percent_weights_dropping=percent_weights_dropping[v],
+      weight_drop_destination=weight_drop_destination[v]
     )
 
     inputs = keras.Input(shape=(784,), name="digits")
@@ -111,26 +95,15 @@ for v in range(variants):
     loss_function = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
-    simulator.pre_train_forward_propagation = [
-      simulator.apply_drift
+    simulator.post_gradient_application = [
+      simulator.apply_weight_drop
     ]
 
     simulator.wrap(model,optimizer,loss_function)
-    simulator.plot(bound_drift)
     
-    simulator.add_test_metrics_entry(0.5,0.8, bound_drift[v])
+    simulator.plot(bound_drift)
 
-    simulator.add_test_metrics_entry(0.4,0.85, bound_drift[v])
-    simulator.add_test_metrics_entry(0.3,0.9, bound_drift[v+1])
-
-    model.fit(x_train, y_train, batch_size=32)
-
-    print(simulator.evaluate(x_test,y_test))
-
+    simulator.fit()
 
     with tf.device('/GPU:0'):
         simulator.fit(epochs, train_dataset, variant_iteration=v)
-    tf.keras.backend.clear_session()
-    del model
-    del optimizer
-    del loss_function

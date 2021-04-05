@@ -21,7 +21,9 @@ class wrapper:
         drift_rate_to_upper=1,
         drift_rate_to_zero=1,
         drift_rate_to_lower=1,
-        drift_rate_to_bounds=1
+        drift_rate_to_bounds=1,
+        percent_weights_dropping=0,
+        weight_drop_destination=None
     ):
         self.history = metrics
         self.sigma = sigma
@@ -38,11 +40,9 @@ class wrapper:
         self.drift_rate_to_zero = drift_rate_to_zero
         self.drift_rate_to_lower = drift_rate_to_lower
         self.drift_rate_to_bounds = drift_rate_to_bounds
-        self.tff_write_variability = tf.function(self.write_variability)
-        self.tff_apply_decay = tf.function(self.apply_decay)
-        self.tff_truncate_center_state = tf.function(self.truncate_center_state)
-        self.tff_training_step = tf.function(self.step)
-
+        self.percent_weights_dropping = percent_weights_dropping
+        self.weight_drop_destination = weight_drop_destination
+        
         self.post_initialization = []
         self.pre_train_forward_propagation = []
         self.post_train_forward_propagation = []
@@ -189,6 +189,19 @@ class wrapper:
                 weights[w].assign((weights[w] + self.range)*(1-self.drift_rate_to_lower)-self.range)
                 weights[w].assign(weights[w]*(1-self.drift_rate_to_zero))
                 weights[w].assign(weights[w] + tf.sign(weights[w])*((self.upper_bound-tf.abs(weights[w]))*self.drift_rate_to_bounds))
+        self.optimizer.apply_gradients(zip(self.zeros,weights))
+
+    def apply_weight_drop(self):
+        weights = self.model.trainable_weights
+        for w in range(len(weights)):
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
+                one = tf.random
+                two = tf.multiply(one,self.precision/self.range)
+                three = tf.clip_by_value(two,clip_value_min=0,clip_value_max=self.precision)
+                four = tf.round(three)
+                five = tf.divide(four,self.precision/self.range)
+                six = tf.subtract(five,abs(self.lower_bound))
+                weights[w].assign(six)
         self.optimizer.apply_gradients(zip(self.zeros,weights))
 
     def step(self, x_batch_train, y_batch_train):
