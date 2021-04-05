@@ -23,7 +23,9 @@ class wrapper:
         drift_rate_to_upper=0,
         drift_rate_to_zero=0,
         drift_rate_to_lower=0,
-        drift_rate_to_bounds=0
+        drift_rate_to_bounds=0,
+        drop_destination=0,
+        drop_threshold=0
     ):
         self.metrics = metrics
         self.variability_stdev = variability_stdev
@@ -40,10 +42,8 @@ class wrapper:
         self.drift_rate_to_zero = drift_rate_to_zero
         self.drift_rate_to_lower = drift_rate_to_lower
         self.drift_rate_to_bounds = drift_rate_to_bounds
-        self.tff_write_variability = tf.function(self.write_variability)
-        self.tff_apply_decay = tf.function(self.apply_decay)
-        self.tff_truncate_center_state = tf.function(self.truncate_center_state)
-        self.tff_training_step = tf.function(self.step)
+        self.drop_destination = drop_destination
+        self.drop_threshold = drop_threshold
 
         self.post_initialization = []
         self.pre_train_forward_propagation = []
@@ -196,6 +196,20 @@ class wrapper:
                 self.cell_updates[g].assign_add(tf.cast(self.grad[g] != 0, self.cell_updates[g].dtype))
             except:
                 pass
+    
+    @tf.function
+    def asymmetric_weight_drop(self):
+        weights = self.model.trainable_weights
+        for w in range(len(weights)):
+            if (not 'conv' in weights[w].name) and (not 'embed' in weights[w].name):
+                one = tf.math.less_equal(self.grad[w],self.drop_threshold) # returns bool tensor, True = less than or equal to drop threshold
+                two = tf.cast(one,weights[w].dtype) # cast from bool to float
+                three = two * self.drop_destination # True -> 1 -> drop_destination
+                four = tf.math.logical_not(one) # bool tensor where True = greater than drop_threshold
+                five = tf.cast(four,weights[w].dtype) # cast from bool to Float
+                weights[w].assign(weights[w]*five + three)
+        self.optimizer.apply_gradients(zip(self.zeros,weights))
+
 
     def step(self, x_step, y_step):
         """
@@ -284,7 +298,7 @@ class wrapper:
         accuracy = tf.math.count_nonzero(tf.math.equal(winningNeurons,labels)) / len(y)
         return [loss.numpy(),accuracy.numpy()]
 
-    def fit(self, x = None, y = None, batch_size = 1, epochs = 10, variant_number = 0, verbose = 1, validation_split = 0, validation_data = None, validation_batch_size = 1, shuffle = True):
+    def fit(self, x = None, y = None, batch_size = 1, epochs = 10, variant = 0, verbose = 1, validation_split = 0, validation_data = None, validation_batch_size = 1, shuffle = True):
         """
         Trains a model with nonidealities on a dataset over a specified number of epochs.
 
@@ -293,7 +307,7 @@ class wrapper:
         y: Target data (labels) in the form of a vector.
         batch_size: Number of inputs per batch of training. Defaults to 1.
         epochs: Number of epochs before fitting process ends. Defaults to 10.
-        variant_number: If simulating multiple model variants, represents the index of the model simulated.
+        variant: If simulating multiple model variants, represents the index of the model simulated.
         verbose: Descriptivity of the fitting process. 1 = console logging, 0 = none.
         validation_split: Float between 0 and 1 representative of the portion of the training dataset to be split for validation.
         validation_data: Validation data for model fitness evaluation. Should be a list (x_val, y_val). Overrides validation split.
@@ -331,10 +345,10 @@ class wrapper:
         (loss,accuracy) = self.evaluate(x=x_validation, y=y_validation)
         test_loss       = [loss]
         test_accuracy   = [accuracy]
-        print("Variant Number: ", str(variant_number))
+        print("Variant: ", str(variant))
         print("Baseline\tLoss: ", "{:.4f}".format(loss), "\tAccuracy: ", "{:.2f}".format(accuracy*100),"%")
-        self.metrics.loss.add_value(loss, 0, variant_number)
-        self.metrics.accuracy.add_value(accuracy, 0, variant_number)
+        self.metrics.loss.add_value(loss, 0, variant)
+        self.metrics.accuracy.add_value(accuracy, 0, variant)
         # Fitting
         for epoch in range(1,epochs+1):
             with IncrementalBar('Epoch ' + str(epoch) + '\t\t', max=len(train_dataset), suffix="%(index)d/%(max)d - %(eta)ds\tLoss: " + "{:.4f}".format(loss) + "\tAccuracy: " + "{:.2f}".format(accuracy*100) + "%%") as bar:
@@ -344,6 +358,6 @@ class wrapper:
                     bar.next()
                 print("")
                 (loss,accuracy) =  self.evaluate(x=x_validation, y=y_validation)
-                self.metrics.loss.add_value(loss, epoch, variant_number)
-                self.metrics.accuracy.add_value(accuracy, epoch, variant_number)
+                self.metrics.loss.add_value(loss, epoch, variant)
+                self.metrics.accuracy.add_value(accuracy, epoch, variant)
         print("\tFinal loss: ", loss, "\tAccuracy: ", accuracy*100,"%")
