@@ -20,21 +20,21 @@ if gpus:
 
 
 # Prepare the training dataset.
-# (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
-# batch_size    = 32
-# x_train       = np.reshape(x_train, (-1, 784)) / 255
-# x_test        = np.reshape(x_test, (-1, 784)) / 255
+(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+batch_size    = 32
+x_train       = np.reshape(x_train, (-1, 784)) / 255
+x_test        = np.reshape(x_test, (-1, 784)) / 255
 
 max_features = 20000  # Only consider the top 20k words
 maxlen = 200  # Only consider the first 200 words of each movie review
-(x_train, y_train), (x_test, y_test) = tf.keras.datasets.imdb.load_data(num_words=max_features)
-x_train = tf.keras.preprocessing.sequence.pad_sequences(x_train, maxlen=maxlen)
-x_test = tf.keras.preprocessing.sequence.pad_sequences(x_test, maxlen=maxlen)
-x_train = x_train[0:20]
-y_train = y_train[0:20]
-x_test = x_test[0:10]
-y_test = y_test[0:10]
-batch_size    = 16
+# (x_train, y_train), (x_test, y_test) = tf.keras.datasets.imdb.load_data(num_words=max_features)
+# x_train = tf.keras.preprocessing.sequence.pad_sequences(x_train, maxlen=maxlen)
+# x_test = tf.keras.preprocessing.sequence.pad_sequences(x_test, maxlen=maxlen)
+# x_train = x_train[0:20]
+# y_train = y_train[0:20]
+# x_test = x_test[0:10]
+# y_test = y_test[0:10]
+# batch_size    = 16
 
 
 
@@ -64,8 +64,10 @@ upper_drift = np.zeros(variants)
 lower_drift = np.zeros(variants)
 # zero_drift = np.linspace(0,0.1,variants)
 zero_drift = np.zeros(variants)
-bound_drift = np.linspace(0,0.1,variants)  
-# bound_drift = np.zeros(variants)
+# bound_drift = np.linspace(0,0.1,variants)  
+bound_drift = np.zeros(variants)
+drop_destination = -0.1
+drop_threshold = np.flip(np.logspace(-1*variants+2,0,variants-1)*-1)
 
 history = lp.metrics()
 
@@ -85,11 +87,13 @@ for v in range(variants):
       drift_rate_to_lower=lower_drift[v],
       drift_rate_to_upper=upper_drift[v],
       drift_rate_to_zero=zero_drift[v],
-      drift_rate_to_bounds=bound_drift[v]
+      drift_rate_to_bounds=bound_drift[v],
+      drop_destination=drop_destination,
+      drop_threshold=drop_threshold[v]
     )
 
-    # inputs = keras.Input(shape=(784,), name="digits")
-    # outputs = layers.Dense(10, name="predictions")(inputs)
+    inputs = keras.Input(shape=(784,), name="digits")
+    outputs = layers.Dense(10, name="predictions")(inputs)
 
     # inputs = keras.Input(shape=(784,), name="digits")
     # x1 = layers.Dense(533, activation="relu")(inputs)
@@ -104,33 +108,29 @@ for v in range(variants):
     # d1 = layers.Dropout(0.5)(f1)
     # outputs = layers.Dense(10, activation="softmax")(d1)
 
-    inputs = tf.keras.Input(shape=(None,), dtype="int32")
-    x = tf.keras.layers.Embedding(max_features, 128)(inputs)
-    x = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64, return_sequences=True),name="LowPy-bidirectional1")(x)
-    x = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64),name="LowPy-bidirectional2")(x)
-    outputs = tf.keras.layers.Dense(2, activation="sigmoid",name="LowPy-output")(x)
+    # inputs = tf.keras.Input(shape=(None,), dtype="int32")
+    # x = tf.keras.layers.Embedding(max_features, 128)(inputs)
+    # x = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64, return_sequences=True),name="LowPy-bidirectional1")(x)
+    # x = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64),name="LowPy-bidirectional2")(x)
+    # outputs = tf.keras.layers.Dense(2, activation="sigmoid",name="LowPy-output")(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs)
     optimizer = keras.optimizers.Adam()
     loss_function = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
-    # simulator.post_initialization = [
-    #   simulator.initialization_variability,
-    #   simulator.initialize_stuck_at_fault_matrices
-    # ]
-    simulator.post_gradient_calculation = [
-      simulator.track_weight_updates
+    simulator.post_gradient_application = [
+      simulator.asymmetric_weight_drop
     ]
     
 
     simulator.wrap(model,optimizer,loss_function)
-    simulator.plot(bound_drift)
+    simulator.plot(drop_threshold)
 
 
     
 
     with tf.device('/CPU:0'):
-        simulator.fit(x=x_train, y=y_train, batch_size=32, epochs=2, variant_number=v, validation_split=0.1)
+        simulator.fit(x=x_train, y=y_train, batch_size=32, epochs=2, variant=drop_threshold[v], validation_split=0.1)
 
     simulator.metrics.export_weights("Variant"+str(v), simulator.cell_updates)
