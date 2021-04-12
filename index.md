@@ -20,7 +20,7 @@ LowPy takes an existing model defined via the [Keras Functional API](https://ker
 
 ## Import libraries
 To start, let's import Tensorflow, Numpy, and our MNIST dataset.
-```Python
+```python
 import tensorflow as tf
 import numpy as np
 import lowpy as lp
@@ -33,7 +33,7 @@ x_test        = np.reshape(x_test, (-1, 784)) / 255 # Flatten and normalize
 
 ## Define hyperparameters
 In this example, we will simulate 7 MLP variants, all with differing amounts of write variability, over 5 epochs of fitting.
-```Python
+```python
 epochs = 5
 batch_size = 32
 variants = 7
