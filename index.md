@@ -8,19 +8,25 @@ layout: default
 
 # Features
 The aim is to focus first on the algorithms most published on in the field of neuromorphic computing, for both static and time series datasets.
+
 ### Datasets
 - MNIST
+
 ### Algorithms
 - Single Layer Perceptron (SLP)
 - Multi-Layer Perceprton (MLP)
+
 ### Activation Functions
 - Sigmoid
+
 ### Optimization Functions
 - Stochastic Gradient Descent (SGD)
 - SGD with Momentum
+
 ### Initialization Distributions
 - Uniform 
 - Normal
+
 ### Device Characteristics
 - Write Variability
 
