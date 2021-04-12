@@ -82,4 +82,4 @@ Our MLP, optimizer, and loss function can be defined and compiled via the Keras 
 ```python
     with tf.device('/CPU:0'):
             simulator.fit(x=x_train, y=y_train, batch_size=batch_size, epochs=epochs, variant=drop_threshold[v], validation_split=0.1)
-        
+```
