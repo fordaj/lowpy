@@ -1,3 +1,6 @@
+---
+layout: default
+---
 # Welcome to LowPy (Pre-release)!
 <p align="center"><img src="logo.png" height="100px"></p>
 

@@ -20,7 +20,7 @@ if gpus:
 
 
 # Prepare the training dataset.
-(x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
 batch_size    = 32
 x_train       = np.reshape(x_train, (-1, 784)) / 255
 x_test        = np.reshape(x_test, (-1, 784)) / 255
