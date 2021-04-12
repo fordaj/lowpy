@@ -39,7 +39,7 @@ batch_size = 32
 variants = 7
 # Define variability_stdev = [0 1e-5 1e-4 1e-3 1e-2 1e-1 1e0]:
 variability_stdev = np.logspace(-1*variants+2,0,variants-1)
-variability_stdev = np.insert(sigma,0,0,axis=0)
+variability_stdev = np.insert(variability_stdev,0,0,axis=0)
 ```
 Using `numpy` allows for quick alteration of the number of variants simulated.
 
@@ -57,15 +57,15 @@ for v in range(variants): # 7 variants total
 ### Define a model
 Our MLP, optimizer, and loss function can be defined and compiled via the Keras functional API:
 ``` python
-    inputs = keras.Input(shape=(784,), name="input")
-    hidden = layers.Dense(533, activation="relu", name="lowpy-hidden")(inputs)
-    outputs = layers.Dense(10, name="lowpy-output")(hidden)
+    inputs = tf.keras.Input(shape=(784,), name="input")
+    hidden = tf.keras.layers.Dense(533, activation="relu", name="lowpy-hidden")(inputs)
+    outputs = tf.keras.layers.Dense(10, name="lowpy-output")(hidden)
 
-    model = keras.Model(inputs=inputs, outputs=outputs)
-    optimizer = keras.optimizers.Adam()
-    loss_function = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    optimizer = tf.keras.optimizers.Adam()
+    loss_function = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
-    model.compile(optimizer,loss_function,metrics=[keras.metrics.SparseCategoricalAccuracy()])
+    model.compile(optimizer,loss_function,metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
 ```
 
 ### Configure LowPy simulator
@@ -73,13 +73,67 @@ Our MLP, optimizer, and loss function can be defined and compiled via the Keras 
     simulator = lp.wrapper(history, variability_stdev=variability_stdev[v])
     simulator.wrap(model, optimizer, loss_function)
     simulator.post_gradient_application = [
-        simulator.apply_write_variability
+        simulator.write_variability
     ]
     simulator.plot(variability_stdev)
 ```
 
 ### Fit model with GPU
 ```python
-    with tf.device('/CPU:0'):
+    with tf.device('/GPU:0'):
             simulator.fit(x=x_train, y=y_train, batch_size=batch_size, epochs=epochs, variant=drop_threshold[v], validation_split=0.1)
 ```
+
+## Results
+Console output for first variant:
+```
+--------------------------
+Evaluation:      |################################| 6000/6000
+Variant:  0.0
+Baseline        Loss:  2.3620   Accuracy:  7.08 %
+Epoch 1          |████████████████████████████████| 1688/1688 - 0s      Loss: 2.3620    Accuracy: 7.08%
+Evaluation:      |################################| 6000/6000
+
+Epoch 2          |████████████████████████████████| 1688/1688 - 0s      Loss: 0.0944    Accuracy: 96.90%
+Evaluation:      |################################| 6000/6000
+
+Epoch 3          |████████████████████████████████| 1688/1688 - 0s      Loss: 0.0908    Accuracy: 97.02%
+Evaluation:      |################################| 6000/6000
+
+Epoch 4          |████████████████████████████████| 1688/1688 - 0s      Loss: 0.0815    Accuracy: 97.50%
+Evaluation:      |################################| 6000/6000
+
+Epoch 5          |████████████████████████████████| 1688/1688 - 0s      Loss: 0.0809    Accuracy: 97.90%
+Evaluation:      |################################| 6000/6000
+
+        Final loss:  0.08197149         Accuracy:  98.0 %
+--------------------------
+```
+`Accuracy.csv` file of all variants:
+```csv
+,0.0,1e-05
+0,0.07083333333333333,0.11633333333333333
+1,0.969,0.9591666666666666
+2,0.9701666666666666,0.9736666666666667
+3,0.975,0.9746666666666667
+4,0.979,0.97
+5,0.98,
+
+```
+Example plot:
+<p align="center"><img src="mlp_example_plot.png"></p>
+
+# Event Driven Architecture
+There are a number of nonidealities that can occur during fitting, validation, evaluation, and even just during an inference, at various times. A device with notable write variability, for example, will cause varied weights to occur anytime the device is written to. A device with notable drift will result in varied weights anytime a read operation occurs. This is handled using a number different events, shown in the blue `function_vectors` below.
+
+<p align="center"><img src="flow.png"></p>
+
+For instance, in our MLP example above, we alter the weights after they are updated during a Gradient Application. This is done by appending LowPy's non-ideal write variability function to the `post_gradient_application` function vector:
+
+```python
+simulator.post_gradient_application = [
+    simulator.write_variability # NOT a function call; no ()'s
+]
+```
+
+With this setup, multiple non-ideal functions can be executed in a set order prior to or following any of the fitting, validation, and evaluation events.
